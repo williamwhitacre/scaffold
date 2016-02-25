@@ -1,0 +1,29 @@
+{
+    "version": "4.0.6",
+    "summary": "Scaffold - Elm Boilerplate Reduction",
+    "repository": "https://github.com/williamwhitacre/gigan.git",
+    "license": "",
+    "source-directories": [
+        "./src"
+    ],
+    "exposed-modules": [
+        "Gigan.Core",
+        "Gigan.Error",
+        "Gigan.Layout",
+        "Gigan.Stem",
+        "Gigan.Knowledge"
+    ],
+    "dependencies": {
+        "Apanatshka/elm-signal-extra": "5.7.0 <= v < 6.0.0",
+        "NoRedInk/elm-lazy-list": "2.0.0 <= v < 3.0.0",
+        "NoRedInk/elm-task-extra": "1.0.1 <= v < 2.0.0",
+        "circuithub/elm-html-extra": "1.5.2 <= v < 2.0.0",
+        "elm-lang/core": "3.0.0 <= v < 4.0.0",
+        "evancz/elm-html": "4.0.2 <= v < 5.0.0",
+        "evancz/elm-http": "3.0.0 <= v < 4.0.0",
+        "evancz/elm-svg": "2.0.1 <= v < 3.0.0",
+        "evancz/virtual-dom": "2.1.0 <= v < 3.0.0",
+        "lukewestby/elm-http-extra": "1.2.2 <= v < 2.0.0"
+    },
+    "elm-version": "0.16.0 <= v < 0.17.0"
+}
