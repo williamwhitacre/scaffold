@@ -1,7 +1,6 @@
 # Scaffold
 
-Stand by.
-
+## [An example to tide you over.](https://github.com/williamwhitacre/scaffold/blob/master/examples/Scaffold-DynamicCounter.elm)
 
 ## This is not an alternative architecture.
 
