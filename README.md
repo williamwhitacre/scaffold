@@ -55,8 +55,8 @@ Contains the basic definition of Resource, ResourceBase, ResourceRecord, the Bas
 3. `voidResource` -- A resource that does not exist, verified. Could be thought of as NothingRemotelyOrHere.
 4. `undecidedResource` -- Represent a resource resulting from a generic error. This is also used as the default promotion from Error to Resource.
 5. `forbiddenResource` -- Forbidden resources should be used to denote things that the user shouldn't see.
-6. `resourceDo` -- perform some task to update the resource. Can be anything, including computation, fetching, or fully blown CRUD.
-7. `knownResource` -- A resource with a known and up to date datum.
+6. `defResource` -- A resource with a known and up to date datum.
+7. `doOperation` -- perform some task to update the resource. Can be anything, including computation, fetching, or fully blown CRUD.
 
 You can create a mapping from data to view machines:
 
