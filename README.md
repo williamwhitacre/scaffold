@@ -26,7 +26,7 @@ _(In Gigan, this was formerly called Gigan.Stem.)_
 
 ### Scaffold.Resource
 
-Contains the basic definition of Resource, ResourceBase, ResourceRecord, the BaseResource and RecordResource types for nesting, and the Remote and QueryTask types for reactivity and remote synchronization. A MachineResource type is a natural extension of this, and has yet to be implemented in the library. Even with it not being an explicit feature of the library, the result of using a ResourceBase of Machines bound to remote or locally stored data by your own CRUD tasks library for your specific back-end. It can be as rich or as basic as you need. Resources can be the following things:
+Contains the basic definition of Resource, ResourceBase, ResourceRecord, the BaseResource and RecordResource types for nesting, and the Remote and QueryTask types for reactivity and remote synchronization. ~~A MachineResource type is a natural extension of this, and has yet to be implemented in the library.~~ See the `machineResource` function for a basic bridge that derives a machine from a resource with a one way data flow. This is really awesome for pure views, and the business logic for resource management is one level up in the controller, as it should be. This is done with resource reductions and the `base` and `record` mapping facilities. ~~Even with it not being an explicit feature of the library,~~ the result of using a ResourceBase of Machines bound to remote or locally stored data by your own CRUD tasks library for your specific back-end. It can be as rich or as basic as you need. Resources can be the following things:
 
 1. `unknownResource` -- Something that isn't known at all. This also counts as nothing or no record in the Resource.Base and Resource.Record APIs.
 2. `pendingResource` -- A task that will perform some work and give an updated version of the resource has been dispatched, and this placeholder is given in place of the pending result. Resources that are set to produce Remote Tasks will be rolled over to pending resources on `*Integrate` on a base, record or individual resource.
@@ -35,6 +35,11 @@ Contains the basic definition of Resource, ResourceBase, ResourceRecord, the Bas
 5. `forbiddenResource` -- Forbidden resources should be used to denote things that the user shouldn't see.
 6. `resourceDo` -- perform some task to update the resource. Can be anything, including computation, fetching, or fully blown CRUD.
 7. `knownResource` -- A resource with a known and up to date datum.
+
+You can create a mapping from data to view machines:
+
+    deltaDataToView = machineResource (defProgram' present stage update) myViewData
+
 
 Resources can be resolved compositionally:
 
