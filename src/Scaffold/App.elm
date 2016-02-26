@@ -28,65 +28,66 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 --}
 
 
-module Gigan.Core
+module Scaffold.App
 
-  (AgentStatus, ComputedResult, ComputedSuccess, OrbiterInput, OrbiterOutput, OrbiterSnapshot,
-  OrbiterTap, OrbiterTask, TaskDispatchment, UpdatedModel, ViewOutput,
+  (AgentStatus, ComputedResult, ComputedSuccess, ProgramInput, ProgramOutput, ProgramSnapshot,
+  ProgramConnector, ProgramTask, TaskDispatchment, UpdatedModel, ViewOutput,
 
   defProgram, defProgram',
 
-  orbits, orbitsWithWork, withInputs, withLazySequenceInputs, withSequenceInputs, sieve, (+-->),
+  run, runWithWork, withInputs, withLazySequenceInputs, defLazySequenceInputs, withSequenceInputs,
+  defSequenceInputs, appOutputPort,
 
   updated, presented, withTasks, withDispatchment, withChildren, viewOutputTask,
 
   actionTask, actionTaskAsync, errorTask, computeTask, computedSuccess, computedSuccessAsync,
   noActions, nilTask,
 
-  itself, itselfAsync, it'sErrorTap, thisAddress, thisAddressAsync, thisForwardAddress,
-  thisForwardAddressAsync, thisErrorTap, thisForwardTap, thisTap,
+  itself, itselfAsync, it'sErrorConnector, thisAddress, thisAddressAsync, thisForwardAddress,
+  thisForwardAddressAsync, thisErrorConnector, thisForwardConnector, thisConnector,
 
   combineDispatchments, collapseTasks, dispatchTasks, dispatchmentHasWork, dispatchmentTask,
   promoteDispatchment,
 
-  orbiterSnapshot, orbiterSnapshotAddDispatchment, orbiterSnapshotDispatch,
-  orbiterSnapshotPresent, orbiterSnapshotStage, orbiterSnapshotUpdate, performCycle,
+  programSnapshot, programSnapshotAddDispatchment, programSnapshotDispatch,
+  programSnapshotPresent, programSnapshotStage, programSnapshotUpdate, performCycle,
 
-  orbiterAgentSuccess, orbiterAgentFailure, orbiterAgent, orbiterSuccessAgent, orbiterFailureAgent,
-  orbiterBinaryAgent, orbiterBlindAgent, orbiterNilAgent, orbiterResultAgent, ignoreError)
+  programAgentSuccess, programAgentFailure, programAgent, programSuccessAgent, programFailureAgent,
+  programBinaryAgent, programBlindAgent, programNilAgent, programResultAgent, ignoreError)
 
   where
 
 {-| The main application scaffolding. You can write a really pretty top level like this:
 
-    myOrbiter : OrbiterOutput MyAction MyModel Layout.Item Error
-    myOrbiter =
+    myProgramOutput : ProgramOutput MyAction MyModel Layout.Item Error
+    myProgramOutput =
       myProgram
         `withSequenceInputs`
           [ someVeryImportantBrowserEnvironmentInput
           , someOtherOutsideSignal
           ]
-        `orbitsWithWork`
+        `runWithWork`
           (computeTask doMyComplicatedStartupWork withThisData)
-      +--> (it'sErrorTap myErrorHandler)
-      +--> itself
+      |> (it'sErrorConnector myErrorHandler)
+      |> itself
 
 
     main : Signal Graphics.Element.Element
-    main = Layout.fromItem <~ myOrbiter.view'
+    main = Layout.fromItem <~ myProgramOutput.view'
 
 
     port sink : Signal (Task z ())
-    port sink = sieve myOrbiter
+    port sink = appOutputPort myProgramOutput
 
 
 # Definitions
-@docs AgentStatus, ComputedResult, ComputedSuccess, OrbiterInput, OrbiterOutput, OrbiterSnapshot, OrbiterTap, OrbiterTask, TaskDispatchment, UpdatedModel, ViewOutput
+@docs AgentStatus, ComputedResult, ComputedSuccess, ProgramInput, ProgramOutput, ProgramSnapshot, ProgramConnector, ProgramTask, TaskDispatchment, UpdatedModel, ViewOutput
 
-# Define Orbiter Programs
+# Define Program Programs
 @docs defProgram, defProgram'
 
-# Run Orbiter Programs
-@docs orbits, orbitsWithWork, withInputs, withLazySequenceInputs, withSequenceInputs, sieve, (+-->)
+# Run Program Programs
+@docs run, runWithWork, withInputs, defLazySequenceInputs, defSequenceInputs, withLazySequenceInputs, withSequenceInputs, appOutputPort,
 
 # UpdatedModel and ViewOutput Manipulation
 @docs updated, presented, withTasks, withDispatchment, withChildren, viewOutputTask
@@ -95,16 +96,16 @@ module Gigan.Core
 @docs actionTask, actionTaskAsync, errorTask, computeTask, computedSuccess, computedSuccessAsync, noActions, nilTask
 
 # Intercept and Route Action and Error Outputs
-@docs itself, itselfAsync, it'sErrorTap, thisAddress, thisAddressAsync, thisForwardAddress, thisForwardAddressAsync, thisErrorTap, thisForwardTap, thisTap
+@docs itself, itselfAsync, it'sErrorConnector, thisAddress, thisAddressAsync, thisForwardAddress, thisForwardAddressAsync, thisErrorConnector, thisForwardConnector, thisConnector
 
 # Handling Tasks and TaskDispatchment
 @docs combineDispatchments, collapseTasks, dispatchTasks, dispatchmentHasWork, dispatchmentTask, promoteDispatchment
 
-# Manipulate Orbiter Snapshots
-@docs orbiterSnapshot, orbiterSnapshotAddDispatchment, orbiterSnapshotDispatch, orbiterSnapshotPresent, orbiterSnapshotStage, orbiterSnapshotUpdate, performCycle
+# Manipulate Program Snapshots
+@docs programSnapshot, programSnapshotAddDispatchment, programSnapshotDispatch, programSnapshotPresent, programSnapshotStage, programSnapshotUpdate, performCycle
 
-# Orbiter Task Agents
-@docs orbiterAgentSuccess, orbiterAgentFailure, orbiterAgent, orbiterSuccessAgent, orbiterFailureAgent, orbiterBinaryAgent, orbiterBlindAgent, orbiterNilAgent, orbiterResultAgent, ignoreError
+# Program Task Agents
+@docs programAgentSuccess, programAgentFailure, programAgent, programSuccessAgent, programFailureAgent, programBinaryAgent, programBlindAgent, programNilAgent, programResultAgent, ignoreError
 
 -}
 
@@ -128,8 +129,8 @@ type FeedbackMethod =
   Atomically | Asynchronously
 
 
-{-| A task with a ComputedSuccess result. These are used as the output task type of the Orbiter. -}
-type alias OrbiterTask bad a = Task bad (ComputedSuccess a)
+{-| A task with a ComputedSuccess result. These are used as the output task type of the Program. -}
+type alias ProgramTask bad a = Task bad (ComputedSuccess a)
 
 
 {-| A ComputedResult is a Result which may be a ComputedSuccess or some error type on failure. This
@@ -137,7 +138,7 @@ is used as the output type of the function passed to a `computeTask`. -}
 type alias ComputedResult bad a = Result bad (ComputedSuccess a)
 
 
-{-| This is the success type of an OrbiterTask. It consists of a sequence of actions to execute, and
+{-| This is the success type of an ProgramTask. It consists of a sequence of actions to execute, and
 a tag saying whether we want the actions executed all at once, or spread out asynchronously. This
 should be treated as opaque; use the constructors `computedSuccess` and `computedSuccessAsync`. -}
 type alias ComputedSuccess a =
@@ -146,9 +147,9 @@ type alias ComputedSuccess a =
   }
 
 
-{-| This is the input type for Orbiter. It can be seen as roughly analogous to StartApp's Config
+{-| This is the input type for Program. It can be seen as roughly analogous to StartApp's Config
 type, but carries the full configuration and input in one. This should be considered opaque. -}
-type alias OrbiterInput a b c bad =
+type alias ProgramInput a b c bad =
   { inputs  : LazyList (Signal (LazyList a)) -- lazy list used here to reduce aggregation time
   , model0  : b
   , present : Signal.Address (List a) -> Time -> b -> ViewOutput a c bad
@@ -157,33 +158,33 @@ type alias OrbiterInput a b c bad =
   }
 
 
-{-| This represents an instantaneous description of an Orbiter program. It consists of the current
+{-| This represents an instantaneous description of an Program program. It consists of the current
 model and a possible TaskDispatchment. This should be treated as opaque. -}
-type alias OrbiterSnapshot a b bad =
+type alias ProgramSnapshot a b bad =
   { model' : b
   , dispatchment : TaskDispatchment bad a
   }
 
 
-{-| This is the output of an Orbiter program. This is not intended to be opaque. Any part of the
+{-| This is the output of an Program program. This is not intended to be opaque. Any part of the
 output structure is up for grabs. I do not reccomend usage of the lazyAddress externally.
 
     view'     Signal with the current view.
     model'    Signal with the current model.
     now       Signal with the most recent execution time.
     actions   Signal with the most recently atomically executed action list.
-    tasks     Signal with the most recent OrbiterTask output.
-    address   The address of the Orbiter program's Mailbox.
+    tasks     Signal with the most recent ProgramTask output.
+    address   The address of the Program program's Mailbox.
 
 -}
-type alias OrbiterOutput a b c bad =
+type alias ProgramOutput a b c bad =
   { view' : Signal c
   , model' : Signal b
   , now : Signal Time
   , actions : Signal (List a) -- as a matter of robustness, we should forcibly reduce actions
                               -- action to normal lists so that no spacetime leaks occur on
                               -- account of unbounded laziness.
-  , tasks : Signal (OrbiterTask bad a)
+  , tasks : Signal (ProgramTask bad a)
   , address : Signal.Address (List a)
   , lazyAddress : Signal.Address (LazyList a) -- a performance boost where you want it,
                                               -- simplicity where it's unneeded
@@ -193,12 +194,12 @@ type alias OrbiterOutput a b c bad =
 {-| This is an opaque type representing an ordered list of tasks to execute. This is quite similar
 to Effects batching. -}
 type alias TaskDispatchment bad a =
-  { taskExec : LazyList (OrbiterTask bad a)
+  { taskExec : LazyList (ProgramTask bad a)
   }
 
 
-{-| Represents the output of the `update` and `stage` functions configured in the OrbiterInput.
-This type exists so that TaskDispatchments and OrbiterTasks can be cleanly included in the output
+{-| Represents the output of the `update` and `stage` functions configured in the ProgramInput.
+This type exists so that TaskDispatchments and ProgramTasks can be cleanly included in the output
 of `stage` and `update` without the need to return an ugly pair or embed anything in the model. -}
 type alias UpdatedModel a b bad =
   { dispatchment : TaskDispatchment bad a
@@ -206,8 +207,8 @@ type alias UpdatedModel a b bad =
   }
 
 
-{-| Represents the output of the `present` function configured in the OrbiterInput.
-This type exists so that TaskDispatchments and OrbiterTasks can be cleanly included in the output
+{-| Represents the output of the `present` function configured in the ProgramInput.
+This type exists so that TaskDispatchments and ProgramTasks can be cleanly included in the output
 of `present` without the need to return an ugly pair or embed anything in the model. -}
 type alias ViewOutput a c bad =
   { dispatchment : TaskDispatchment bad a
@@ -215,11 +216,11 @@ type alias ViewOutput a c bad =
   }
 
 
-{-| OrbiterTap is an alias for functions that transform OrbiterTasks by routing their actions to
-an address. You will probably not need to directly provide an OrbiterTap function, as the built in
+{-| ProgramConnector is an alias for functions that transform ProgramTasks by routing their actions to
+an address. You will probably not need to directly provide an ProgramConnector function, as the built in
 family of taps should be sufficient for just about any application. -}
-type alias OrbiterTap bad a =
-  (Signal.Address (List a) -> OrbiterTask bad a -> OrbiterTask bad a)
+type alias ProgramConnector bad a =
+  (Signal.Address (List a) -> ProgramTask bad a -> ProgramTask bad a)
 
 
 {-| A list of no actions. -}
@@ -247,35 +248,35 @@ computedSuccessAsync actions =
   { sequence = actions, method = Asynchronously }
 
 
-{-| An OrbiterTask that does nothing and produces noActions. -}
-nilTask : OrbiterTask bad a
+{-| An ProgramTask that does nothing and produces noActions. -}
+nilTask : ProgramTask bad a
 nilTask = actionTask noActions
 
 
-{-| An OrbiterTask that carries a list of actions to execute atomically.
+{-| An ProgramTask that carries a list of actions to execute atomically.
 
 Note that a tap which is explicitly from the `*Async` family of taps will override this behavior,
 instead producing the same behavior as actionTaskAsync. For that reason, asynchronous taps should
 mainly be used for one-way data flows that are not dependent on ordering. -}
-actionTask : List a -> OrbiterTask bad a
+actionTask : List a -> ProgramTask bad a
 actionTask actions = Task.succeed (computedSuccess actions)
 
 
-{-| An OrbiterTask that carries a list of actions to execute asynchronously, meaning they may be
+{-| An ProgramTask that carries a list of actions to execute asynchronously, meaning they may be
 interspersed with other feedback and inputs. -}
-actionTaskAsync : List a -> OrbiterTask bad a
+actionTaskAsync : List a -> ProgramTask bad a
 actionTaskAsync actions = Task.succeed (computedSuccessAsync actions)
 
 
-{-| An OrbiterTask that carries an error. -}
-errorTask : bad -> OrbiterTask bad a
+{-| An ProgramTask that carries an error. -}
+errorTask : bad -> ProgramTask bad a
 errorTask error' = Task.fail (error')
 
 
-{-| An OrbiterTask that obtains some ComputedResult from user provided data and a user provided
+{-| An ProgramTask that obtains some ComputedResult from user provided data and a user provided
 function, which is invoked during execution of the task. This just gives us basic support for
 deferred computations. -}
-computeTask : (data -> ComputedResult bad a) -> data -> OrbiterTask bad a
+computeTask : (data -> ComputedResult bad a) -> data -> ProgramTask bad a
 computeTask compute' data =
   let
     computation data =
@@ -287,8 +288,8 @@ computeTask compute' data =
     (Task.succeed ()) `andThen` (\_ -> computation data)
 
 
-atomicSuccessTap_ : Signal.Address (List a) -> OrbiterTask bad a -> OrbiterTask bad a
-atomicSuccessTap_ address task =
+atomicSuccessConnector_ : Signal.Address (List a) -> ProgramTask bad a -> ProgramTask bad a
+atomicSuccessConnector_ address task =
   let
     extractedSequence = task `andThen` (\x -> Task.succeed x.sequence)
 
@@ -297,11 +298,11 @@ atomicSuccessTap_ address task =
       `andThen` actionTask
 
 
-asyncSuccessTap_ : Signal.Address (List a) -> OrbiterTask bad a -> OrbiterTask bad a
-asyncSuccessTap_ address task =
+asyncSuccessConnector_ : Signal.Address (List a) -> ProgramTask bad a -> ProgramTask bad a
+asyncSuccessConnector_ address task =
   let
     fitting act prior =
-      prior `andThen` \_ -> atomicSuccessTap_ address <| actionTask [act]
+      prior `andThen` \_ -> atomicSuccessConnector_ address <| actionTask [act]
 
 
     spread sequenceDispatcher =
@@ -312,21 +313,21 @@ asyncSuccessTap_ address task =
 
 
 
-successTap_ : Signal.Address (List a) -> OrbiterTask bad a -> OrbiterTask bad a
-successTap_ address task =
+successConnector_ : Signal.Address (List a) -> ProgramTask bad a -> ProgramTask bad a
+successConnector_ address task =
   let
     attachFitting result =
       Task.succeed result
       |> case result.method of
-            Atomically -> atomicSuccessTap_ address
-            Asynchronously -> asyncSuccessTap_ address
+            Atomically -> atomicSuccessConnector_ address
+            Asynchronously -> asyncSuccessConnector_ address
 
   in
     task `andThen` attachFitting
 
 
-errorTap_ : Signal.Address (List a) -> (bad -> List a) -> OrbiterTask bad a -> OrbiterTask bad a
-errorTap_ address errorActionTransform task =
+errorConnector_ : Signal.Address (List a) -> (bad -> List a) -> ProgramTask bad a -> ProgramTask bad a
+errorConnector_ address errorActionTransform task =
   Signal.forwardTo address errorActionTransform
   |> flip Task.Extra.interceptError task
 
@@ -336,7 +337,7 @@ ignoreError : bad -> List a
 ignoreError = always noActions
 
 
-{-| defProgram is the old declaration form for defining OrbiterInput. It is simpler, and does not
+{-| defProgram is the old declaration form for defining ProgramInput. It is simpler, and does not
 support the `stage` function. Internally this uses the new form, but it has been left in for
 two reasons. One is of course backwards compatibility, but sometimes you just don't need that
 extra firepower, in which case it is mere clutter. -}
@@ -344,11 +345,11 @@ defProgram
   :  (Signal.Address (List a) -> Time -> b -> ViewOutput a c bad)
   -> (a -> Time -> b -> UpdatedModel a b bad)
   -> b
-  -> OrbiterInput a b c bad
+  -> ProgramInput a b c bad
 defProgram present update model = defProgram' present (\_ _ m' -> updated m') update model
 
 
-{-| defProgram' is the complete way to define an OrbiterInput. OrbiterInput is configured with
+{-| defProgram' is the complete way to define an ProgramInput. ProgramInput is configured with
 three functions. `update` and `present` should be familiar to users of StartApp, except for the
 fact that they always have the current time. `stage` is a special addition which allows one to
 use the program Mailbox address from a context in which the model can be updated.
@@ -358,7 +359,7 @@ big model with a really, really big view. There is enough data that keen algorit
 structures, as well as avoiding redundant computations during presentation becomes a neccessity.
 
 You can then structure your application as follows. Represent all these components as instances of
-Stem. From inside `stage`, you can present _only the ones that will or should actually be seen_,
+Machine. From inside `stage`, you can present _only the ones that will or should actually be seen_,
 and cache the results in the model. Since you can create an updated model from here, you can save
 anything that may be later needed during presentation.
 
@@ -371,7 +372,7 @@ defProgram'
   -> (Signal.Address (List a) -> Time -> b -> UpdatedModel a b bad)
   -> (a -> Time -> b -> UpdatedModel a b bad)
   -> b
-  -> OrbiterInput a b c bad
+  -> ProgramInput a b c bad
 defProgram' present stage update model =
   { inputs = Lazy.List.empty
   , model0 = model
@@ -380,6 +381,15 @@ defProgram' present stage update model =
   , stage = stage
   }
 
+
+{-| Forward applicative alternative to withSequenceInputs. -}
+defSequenceInputs : List (Signal (List a)) -> ProgramInput a b c bad -> ProgramInput a b c bad
+defSequenceInputs = flip withInputs
+
+
+{-| Forward applicative alternative to withLazySequenceInputs. -}
+defLazySequenceInputs : List (Signal (LazyList a)) -> ProgramInput a b c bad -> ProgramInput a b c bad
+defLazySequenceInputs = flip withLazySequenceInputs
 
 
 {-
@@ -395,24 +405,24 @@ represent noop. Here's how it looked:
 
 This is DEPRECIATED.
 -}
-withInputs : OrbiterInput a b c bad -> List (Signal a) -> OrbiterInput a b c bad
+withInputs : ProgramInput a b c bad -> List (Signal a) -> ProgramInput a b c bad
 withInputs inR sigs =
   { inR
   | inputs = inR.inputs +++ (List.foldr (\x ls -> (x ~> Lazy.List.singleton) ::: ls) Lazy.List.empty sigs)
   }
 
 
-{-| withSequenceInputs is the preferred way of piping outside sources of actions in to an orbiter
-program. You'll notice from the way this is used that OrbiterInput definitions made by defProgram'
+{-| withSequenceInputs is the preferred way of piping outside sources of actions in to an program
+program. You'll notice from the way this is used that ProgramInput definitions made by defProgram'
 or defProgram refrain from including any inputs right away. The reason for this is that a program
 and the _source_ of it's input are two distinctly separate concerns, though the _content_ of it's
-input is not. In Stem, the inputs of an OrbiterInput are not used. This way, OrbiterInput is also
-usable for defining Stem state machines as well as Orbiter programs.
+input is not. In Machine, the inputs of an ProgramInput are not used. This way, ProgramInput is also
+usable for defining Machine state machines as well as Program programs.
 
     defProgram' myPresent myStage myUpdate myModel0 `withSequenceInputs` [actionListSignal0, actionListSignal1]
 
 -}
-withSequenceInputs : OrbiterInput a b c bad -> List (Signal (List a)) -> OrbiterInput a b c bad
+withSequenceInputs : ProgramInput a b c bad -> List (Signal (List a)) -> ProgramInput a b c bad
 withSequenceInputs inR sigs =
   { inR
   | inputs = inR.inputs +++ (List.foldr (\x ls -> (x ~> Lazy.List.fromList) ::: ls) Lazy.List.empty sigs)
@@ -425,33 +435,33 @@ withSequenceInputs inR sigs =
 {-| Since action lists are internally combined using lazy lists, one may want to just hand over their
 LazyList without converting it to a list. This may sometimes be appropriate, but beware of unbounded
 laziness. Profiling is your friend here. -}
-withLazySequenceInputs : OrbiterInput a b c bad -> List (Signal (LazyList a)) -> OrbiterInput a b c bad
+withLazySequenceInputs : ProgramInput a b c bad -> List (Signal (LazyList a)) -> ProgramInput a b c bad
 withLazySequenceInputs inR sigs =
   { inR
   | inputs = inR.inputs +++ (List.foldr (\x ls -> x ::: ls) Lazy.List.empty sigs)
   }
 
 
-{-| Turn a list of OrbiterTasks in to a TaskDispatchment. -}
-dispatchTasks : List (OrbiterTask bad a) -> TaskDispatchment bad a
+{-| Turn a list of ProgramTasks in to a TaskDispatchment. -}
+dispatchTasks : List (ProgramTask bad a) -> TaskDispatchment bad a
 dispatchTasks = Lazy.List.fromList >> dispatchment_
 
 
-{-| Turn a TaskDispatchment in to an OrbiterTask. Doing this will make things a lot more opaque,
+{-| Turn a TaskDispatchment in to an ProgramTask. Doing this will make things a lot more opaque,
 so ask yourself if it is absolutely neccessary first. Mainly this is included for completeness. -}
-dispatchmentTask : TaskDispatchment bad a -> OrbiterTask bad a
+dispatchmentTask : TaskDispatchment bad a -> ProgramTask bad a
 dispatchmentTask = reduceDispatchment_
 
 
-{-| True iff the TaskDispatchment has at least one OrbiterTask. -}
+{-| True iff the TaskDispatchment has at least one ProgramTask. -}
 dispatchmentHasWork : TaskDispatchment bad a -> Bool
 dispatchmentHasWork dispatchment =
   (Lazy.List.length dispatchment.taskExec) > 0
 
 
-{-| Get an OrbiterTask from a ViewOutput. This is DEPRECIATED. Use TaskDispatchment wherever
+{-| Get an ProgramTask from a ViewOutput. This is DEPRECIATED. Use TaskDispatchment wherever
 possible. -}
-viewOutputTask : ViewOutput a c bad -> OrbiterTask bad a
+viewOutputTask : ViewOutput a c bad -> ProgramTask bad a
 viewOutputTask output = output.dispatchment |> dispatchmentTask
 
 
@@ -473,7 +483,7 @@ promoteDispatchment xdcr dsp =
   }
 
 
-{-| Add some tasks to the output of any of the three Orbiter functions.
+{-| Add some tasks to the output of any of the three Program functions.
 
     updated model `withTasks` [actionTask [Jump, Run]]
     presented viewstuff `withTasks` [errorTask [reportError "You done goofed."]]
@@ -482,7 +492,7 @@ This is definitely the most elegant way to build a TaskDispatchment as well, esp
 context of declaring causality.
 -}
 withTasks
-  :  List (OrbiterTask bad a)
+  :  List (ProgramTask bad a)
   -> { anything | dispatchment : TaskDispatchment bad a }
   -> { anything | dispatchment : TaskDispatchment bad a }
 withTasks tasks out' =
@@ -503,12 +513,12 @@ withDispatchment dispatchment out' =
 
 
 {-| This takes a list of UpdatedModel or ViewOutput instances, and appends each one to the
-TaskDispatchment of the current output. This is preferred when doing model composition with Stem.
+TaskDispatchment of the current output. This is preferred when doing model composition with Machine.
 For example:
 
     staged { collectionModel | memberViews = memberOutputs } `withChildren` memberOutputs
 
-where memberOutputs is a list of stemPresent or stemPresentAs outputs in the example.
+where memberOutputs is a list of machinePresent or machinePresentAs outputs in the example.
 -}
 withChildren
   : List { anything | dispatchment : TaskDispatchment bad a }
@@ -526,29 +536,29 @@ withChildren children out' =
 -- ORBITER AGENTS
 --
 --  These primitives are designed to make it more concise to specify complex branching contingencies
--- in tasks before closing them off either with error reports (see "taps", such as it'sErrorTap).
+-- in tasks before closing them off either with error reports (see "taps", such as it'sErrorConnector).
 -- or with lists of actions to execute on success. We allow control over whether or not something is
 -- interpreted as success or failure at a level that enables total intervention, so business logic
 -- complexity is not limited when constructing contingency graphs (task branching). Using the Elm
 -- Architecture as per usual, we can have logarithmic code size.
 --
 
-{-| Represents the status of a given OrbiterAgent. Orbiter agents are a way of transforming the
+{-| Represents the status of a given ProgramAgent. Program agents are a way of transforming the
 results of arbitrary tasks in to actions and errors for the program to consume. -}
 type AgentStatus bad a =
   AgentSuccess (List a)
   | AgentFailure bad
 
 
-{-| Successful OrbiterAgent output. -}
-orbiterAgentSuccess : List a -> AgentStatus bad a
-orbiterAgentSuccess actions =
+{-| Successful ProgramAgent output. -}
+programAgentSuccess : List a -> AgentStatus bad a
+programAgentSuccess actions =
   AgentSuccess actions
 
 
-{-| Failed OrbiterAgent output. -}
-orbiterAgentFailure : bad -> AgentStatus bad a
-orbiterAgentFailure err' =
+{-| Failed ProgramAgent output. -}
+programAgentFailure : bad -> AgentStatus bad a
+programAgentFailure err' =
   AgentFailure err'
 
 
@@ -558,15 +568,15 @@ agentStatusResult status =
     AgentFailure err' -> Task.succeed (Result.Err err')
 
 
-{-| The basic orbiter agent. Takes two functions, one of which transforms a successful result in to
+{-| The basic program agent. Takes two functions, one of which transforms a successful result in to
 an AgentStatus, and one which does the same for task failure results. This transforms an arbitrary
-task in to an OrbiterTask. Notice that we can easily succeed anyway even if the task failed, or vice
+task in to an ProgramTask. Notice that we can easily succeed anyway even if the task failed, or vice
 versa, because we get an AgentStatus which may be successful or failing either way. This means you
 can skip error handling altogether if you already know what to do with the failure from the scope
 you're in; you can simply map the failure on to some actions that perform an appropriate
 contingency. -}
-orbiterAgent : (x -> AgentStatus bad a) -> (y -> AgentStatus bad a) -> Task y x -> OrbiterTask bad a
-orbiterAgent onSuccess onFailure task =
+programAgent : (x -> AgentStatus bad a) -> (y -> AgentStatus bad a) -> Task y x -> ProgramTask bad a
+programAgent onSuccess onFailure task =
   (task
     `andThen` (onSuccess >> agentStatusResult)
     `onError` (onFailure >> agentStatusResult))
@@ -578,47 +588,47 @@ orbiterAgent onSuccess onFailure task =
 
 
 
-{-| A binary orbiter agent. This does not process any of the results, but simply always gives the
+{-| A binary program agent. This does not process any of the results, but simply always gives the
 succesful AgentStatus (the first one) on task success, otherwise it gives the failed AgentStatus. -}
-orbiterBinaryAgent : AgentStatus bad a -> AgentStatus bad a -> Task y x -> OrbiterTask bad a
-orbiterBinaryAgent onSuccessResult onFailureResult =
-  orbiterAgent (always onSuccessResult) (always onFailureResult)
+programBinaryAgent : AgentStatus bad a -> AgentStatus bad a -> Task y x -> ProgramTask bad a
+programBinaryAgent onSuccessResult onFailureResult =
+  programAgent (always onSuccessResult) (always onFailureResult)
 
-{-| This is a combination of orbiterAgent and orbiterBinary agent which processes successful results
+{-| This is a combination of programAgent and programBinary agent which processes successful results
 to get an AgentStatus, otherwise giving the failed agent status. -}
-orbiterSuccessAgent : (x -> AgentStatus bad a) -> AgentStatus bad a -> Task y x -> OrbiterTask bad a
-orbiterSuccessAgent onSuccess onFailureResult =
-  orbiterAgent onSuccess (always onFailureResult)
+programSuccessAgent : (x -> AgentStatus bad a) -> AgentStatus bad a -> Task y x -> ProgramTask bad a
+programSuccessAgent onSuccess onFailureResult =
+  programAgent onSuccess (always onFailureResult)
 
-{-| This is a combination of orbiterAgent and orbiterBinary agent which gives the successful agent
+{-| This is a combination of programAgent and programBinary agent which gives the successful agent
 status in the case of success, and processes failed results to get an AgentStatus otherwise . -}
-orbiterFailureAgent : AgentStatus bad a -> (y -> AgentStatus bad a) -> Task y x -> OrbiterTask bad a
-orbiterFailureAgent onSuccessResult onFailure =
-  orbiterAgent (always onSuccessResult) onFailure
+programFailureAgent : AgentStatus bad a -> (y -> AgentStatus bad a) -> Task y x -> ProgramTask bad a
+programFailureAgent onSuccessResult onFailure =
+  programAgent (always onSuccessResult) onFailure
 
-{-| The other orbiter agents defined so far are less succinct because they take two arguments, one
+{-| The other program agents defined so far are less succinct because they take two arguments, one
 which applies to the success case and one which applies to the failure case. This one takes a single
 function which processes the task's outcome as a Result, and so is generally a bit shorter to write. -}
-orbiterResultAgent : (Result y x -> AgentStatus bad a) -> Task y x -> OrbiterTask bad a
-orbiterResultAgent produceResult =
-  orbiterAgent (Result.Ok >> produceResult) (Result.Err >> produceResult)
+programResultAgent : (Result y x -> AgentStatus bad a) -> Task y x -> ProgramTask bad a
+programResultAgent produceResult =
+  programAgent (Result.Ok >> produceResult) (Result.Err >> produceResult)
 
 {-| If we don't care about the outcome of a task because it can't fail or produce a meaningful
 result, we can just queue up something to do after it's done. This is perfect for using delay tasks. -}
-orbiterBlindAgent : AgentStatus bad a -> Task y x -> OrbiterTask bad a
-orbiterBlindAgent result =
-  orbiterBinaryAgent result result
+programBlindAgent : AgentStatus bad a -> Task y x -> ProgramTask bad a
+programBlindAgent result =
+  programBinaryAgent result result
 
 {-| No matter what, do nothing. This will get your task to run, but no kind of action or error
 feedback will be produced. -}
-orbiterNilAgent : Task y x -> OrbiterTask bad a
-orbiterNilAgent =
-  orbiterBlindAgent (AgentSuccess [])
+programNilAgent : Task y x -> ProgramTask bad a
+programNilAgent =
+  programBlindAgent (AgentSuccess [])
 
 
 
 dispatchment_
-  :  LazyList (OrbiterTask bad a)
+  :  LazyList (ProgramTask bad a)
   -> TaskDispatchment bad a
 dispatchment_ taskExec =
   { taskExec = taskExec
@@ -627,7 +637,7 @@ dispatchment_ taskExec =
 
 dispatch_
   :  TaskDispatchment bad a
-  -> List (OrbiterTask bad a)
+  -> List (ProgramTask bad a)
   -> TaskDispatchment bad a
 dispatch_ dispatchment seq =
   { dispatchment
@@ -635,7 +645,7 @@ dispatch_ dispatchment seq =
   }
 
 
-reduceDispatchment_ : TaskDispatchment bad a -> OrbiterTask bad a
+reduceDispatchment_ : TaskDispatchment bad a -> ProgramTask bad a
 reduceDispatchment_ dispatchmentRecord =
   Lazy.List.foldl
     (\task task' ->
@@ -650,10 +660,10 @@ reduceDispatchment_ dispatchmentRecord =
 
 -- TEARS OF :JOY:
 
-{-| The sieve is the final stop for OrbiterOutput. This should be attached at a port to get your
+{-| The appOutputPort is the final stop for ProgramOutput. This should be attached at a port to get your
 tasks running. -}
-sieve : OrbiterOutput a b c bad -> Signal (Task z ())
-sieve q'' =
+appOutputPort : ProgramOutput a b c bad -> Signal (Task z ())
+appOutputPort q'' =
   q''.tasks ~> \task' -> {-Debug.log "TASK RCV"-} task'
     `andThen` (\final -> {-Debug.log "TASK OK"-} final |> \_ -> Task.succeed ())
     `onError` (\err -> {-Debug.log "ERROR"-} err |> \_ -> Task.succeed ())
@@ -680,43 +690,43 @@ presented view =
   }
 
 
-{-| Run an orbiter without any startup task.
+{-| Run an program without any startup task.
 
-    orbits (myProgram `withSequenceInputs` [myInput, myInput2])
+    run (myProgram `withSequenceInputs` [myInput, myInput2])
 
 -}
-orbits : OrbiterInput a b c bad -> OrbiterOutput a b c bad
-orbits defs =
-  defs `orbitsWithWork` nilTask
+run : ProgramInput a b c bad -> ProgramOutput a b c bad
+run defs =
+  defs `runWithWork` nilTask
 
 
-{-| Constructor for an OrbiterSnapshot. I reccomend using the Stem module instead of these functions. -}
-orbiterSnapshot : b -> TaskDispatchment bad a -> OrbiterSnapshot a b bad
-orbiterSnapshot model0 dispatchment =
+{-| Constructor for an ProgramSnapshot. I reccomend using the Machine module instead of these functions. -}
+programSnapshot : b -> TaskDispatchment bad a -> ProgramSnapshot a b bad
+programSnapshot model0 dispatchment =
   { dispatchment = dispatchment
   , model' = model0 }
 
 
-{-| Add a dispatchment to an OrbiterSnapshot. -}
-orbiterSnapshotAddDispatchment : TaskDispatchment bad a -> OrbiterSnapshot a b bad -> OrbiterSnapshot a b bad
-orbiterSnapshotAddDispatchment dispatchment' { dispatchment, model' } =
+{-| Add a dispatchment to an ProgramSnapshot. -}
+programSnapshotAddDispatchment : TaskDispatchment bad a -> ProgramSnapshot a b bad -> ProgramSnapshot a b bad
+programSnapshotAddDispatchment dispatchment' { dispatchment, model' } =
   { dispatchment = combineDispatchments dispatchment dispatchment'
   , model' = model'
   }
 
 
-{-| Run the `update` phase on an OrbiterSnapshot. -}
-orbiterSnapshotUpdate
+{-| Run the `update` phase on an ProgramSnapshot. -}
+programSnapshotUpdate
   : { k | update : a -> Time -> b -> UpdatedModel a b bad }
   -> List a
   -> Time
-  -> OrbiterSnapshot a b bad
-  -> OrbiterSnapshot a b bad
-orbiterSnapshotUpdate { update } actions now state =
+  -> ProgramSnapshot a b bad
+  -> ProgramSnapshot a b bad
+programSnapshotUpdate { update } actions now state =
   let
     applyAction action state =
       update action now state.model'
-      |> \updated' -> orbiterSnapshotAddDispatchment
+      |> \updated' -> programSnapshotAddDispatchment
         updated'.dispatchment
         { state | model' = updated'.model' }
 
@@ -730,37 +740,37 @@ orbiterSnapshotUpdate { update } actions now state =
   , update : (a -> Time -> b -> UpdatedModel a b bad)
 -}
 
-{-| Run the `stage` phase on an OrbiterSnapshot. -}
-orbiterSnapshotStage
+{-| Run the `stage` phase on an ProgramSnapshot. -}
+programSnapshotStage
   : { k | stage : Signal.Address (List a) -> Time -> b -> UpdatedModel a b bad }
   -> Signal.Address (List a)
   -> Time
-  -> OrbiterSnapshot a b bad
-  -> OrbiterSnapshot a b bad
-orbiterSnapshotStage { stage } address now state =
+  -> ProgramSnapshot a b bad
+  -> ProgramSnapshot a b bad
+programSnapshotStage { stage } address now state =
   stage address now state.model'
   |> \{dispatchment, model'} ->
-    orbiterSnapshotAddDispatchment dispatchment { state | model' = model' }
+    programSnapshotAddDispatchment dispatchment { state | model' = model' }
 
 
-{-| Run the `present` phase on an OrbiterSnapshot, yielding a ViewOutput. -}
-orbiterSnapshotPresent
+{-| Run the `present` phase on an ProgramSnapshot, yielding a ViewOutput. -}
+programSnapshotPresent
   : { k | present : Signal.Address (List a) -> Time -> b -> ViewOutput a c bad }
   -> Signal.Address (List a)
   -> Time
-  -> OrbiterSnapshot a b bad
+  -> ProgramSnapshot a b bad
   -> ViewOutput a c bad
-orbiterSnapshotPresent { present } address now state =
+programSnapshotPresent { present } address now state =
   present address now state.model'
 
 
-{-| Get the pending TaskDispatchment out of an OrbiterSnapshot and clear it from the snapshot in
-one go. This gives an _ugly pair_. See the newer interface for this in Stem, and also see the way
-Knowledge works. It seems much better to separate this in to two stages. It leaves room for a mistake,
+{-| Get the pending TaskDispatchment out of an ProgramSnapshot and clear it from the snapshot in
+one go. This gives an _ugly pair_. See the newer interface for this in Machine, and also see the way
+Resource works. It seems much better to separate this in to two stages. It leaves room for a mistake,
 which I was trying to avoid, but it's so much cleaner than way that it's worth it and actually
 leads to fewer mistakes as a result. -}
-orbiterSnapshotDispatch : OrbiterSnapshot a b bad -> (OrbiterSnapshot a b bad, TaskDispatchment bad a)
-orbiterSnapshotDispatch state =
+programSnapshotDispatch : ProgramSnapshot a b bad -> (ProgramSnapshot a b bad, TaskDispatchment bad a)
+programSnapshotDispatch state =
   (,)
     { state
     | dispatchment = dispatchTasks []
@@ -770,40 +780,40 @@ orbiterSnapshotDispatch state =
 
 {-| Collapse two action tasks by executing them sequentially and appending their resulting action
 outputs. -}
-collapseTasks : OrbiterTask bad a -> OrbiterTask bad a -> OrbiterTask bad a
+collapseTasks : ProgramTask bad a -> ProgramTask bad a -> ProgramTask bad a
 collapseTasks task task' =
   task `andThen` \a0 -> task' `andThen` \a1 -> actionTask (List.append a0.sequence a1.sequence)
 
 
-{-| Perform a full cycle on an OrbiterSnapshot. This looks like:
+{-| Perform a full cycle on an ProgramSnapshot. This looks like:
 
       state
-      |> orbiterSnapshotUpdate input actions now
-      |> orbiterSnapshotStage input address now
-      |> orbiterSnapshotDispatch
+      |> programSnapshotUpdate input actions now
+      |> programSnapshotStage input address now
+      |> programSnapshotDispatch
 
-internally. The point of performCycle is to be used in foldp, which it is inside orbitsWithWork
-and orbits (which really just calls orbitsWithWork with nilTask).
+internally. The point of performCycle is to be used in foldp, which it is inside runWithWork
+and run (which really just calls runWithWork with nilTask).
 -}
 performCycle
-  : OrbiterInput a b c bad
+  : ProgramInput a b c bad
   -> Signal.Address (List a)
   -> (Time, List a)
-  -> (OrbiterSnapshot a b bad, TaskDispatchment bad a)
-  -> (OrbiterSnapshot a b bad, TaskDispatchment bad a)
+  -> (ProgramSnapshot a b bad, TaskDispatchment bad a)
+  -> (ProgramSnapshot a b bad, TaskDispatchment bad a)
 performCycle input address (now, actions) (state, _) =
   state
-  |> orbiterSnapshotUpdate input actions now
-  |> orbiterSnapshotStage input address now
-  |> orbiterSnapshotDispatch
+  |> programSnapshotUpdate input actions now
+  |> programSnapshotStage input address now
+  |> programSnapshotDispatch
 
 
-{-| This is the workhorse of Gigan.Core. Given an OrbiterInput and some starting OrbiterTask,
-run the Orbiter program described by the input to give an OrbiterOutput. -}
-orbitsWithWork : OrbiterInput a b c bad -> OrbiterTask bad a -> OrbiterOutput a b c bad
-orbitsWithWork orbiterInput startupTask =
+{-| This is the workhorse of Scaffold.App. Given an ProgramInput and some starting ProgramTask,
+run the Program program described by the input to give an ProgramOutput. -}
+runWithWork : ProgramInput a b c bad -> ProgramTask bad a -> ProgramOutput a b c bad
+runWithWork programInput startupTask =
   let
-    { inputs, model0, present, stage, update } = orbiterInput
+    { inputs, model0, present, stage, update } = programInput
 
 
     actionMailbox = Signal.mailbox Lazy.List.empty
@@ -820,26 +830,26 @@ orbitsWithWork orbiterInput startupTask =
     inputSignal = Time.timestamp (aggregatedInputs ~> Lazy.List.toList)
 
 
-    orbiterFold =
+    programFold =
       Signal.foldp
-        (performCycle orbiterInput publicAddress)
-        (dispatchTasks [startupTask] |> orbiterSnapshot model0, dispatchTasks [])
+        (performCycle programInput publicAddress)
+        (dispatchTasks [startupTask] |> programSnapshot model0, dispatchTasks [])
         inputSignal
 
 
-    orbiterFoldTimestamps = inputSignal ~> fst
-    orbiterFoldSnapshots = orbiterFold ~> fst
-    orbiterFoldDispatchments = orbiterFold ~> snd
+    programFoldTimestamps = inputSignal ~> fst
+    programFoldSnapshots = programFold ~> fst
+    programFoldDispatchments = programFold ~> snd
 
 
-    views = orbiterSnapshotPresent orbiterInput publicAddress <~ orbiterFoldTimestamps ~ orbiterFoldSnapshots
+    views = programSnapshotPresent programInput publicAddress <~ programFoldTimestamps ~ programFoldSnapshots
 
 
     combinedDispatchments =
       Signal.Extra.fairMerge
         -- model (update/stage) tasks go before view (present) tasks
         combineDispatchments
-        orbiterFoldDispatchments
+        programFoldDispatchments
         (.dispatchment <~ views)
 
 
@@ -853,85 +863,72 @@ orbitsWithWork orbiterInput startupTask =
 
     outputConfig =
       { view' = views ~> .view'
-      , model' = orbiterFoldSnapshots ~> .model'
+      , model' = programFoldSnapshots ~> .model'
       , tasks = filteredTasks
       , now = inputSignal ~> fst
       , actions = inputSignal ~> snd
       , address = publicAddress
       , lazyAddress = actionMailbox.address
-      -- TODO factor the current time in to the orbiter _output_
+      -- TODO factor the current time in to the program _output_
       }
 
   in
     outputConfig
 
 
--- NOTE : This is an alias for |>, but is intended to make opaque the semantics of an _orbiter_ and
--- it's _taps_. This is done so that one needn't reason about function application at all to install
--- taps. Instead, think of +--> as meaning "and then flows in to".
-
-{-| While it may be a case of "your stupid infix operator", I think it makes writing taps nicer
-simply because I see `+---> itself` and I think "oh, it has an edge going to itself". This is one
-of those instances where the abstraction can actually help with comprehension because it acually looks
-like a directed graph edge. See the main example for usage. _NOTE: you can use (|>) to be more
-standard._ -}
-(+-->) : OrbiterOutput a b c bad -> (OrbiterOutput a b c bad -> OrbiterOutput a b c bad) -> OrbiterOutput a b c bad
-(+-->) output portal =
-    portal output
-
-{-| A tap defined using an OrbiterTap and some address. The OrbiterTasks that pass through this tap will be
+{-| A tap defined using an ProgramConnector and some address. The ProgramTasks that pass through this tap will be
 routed to the given address. This is a bit lower level than is needed in most cases. -}
-thisTap
-  :  OrbiterTap bad a
+thisConnector
+  :  ProgramConnector bad a
   -> Signal.Address (List a)
-  -> OrbiterOutput a b c bad
-  -> OrbiterOutput a b c bad
-thisTap tap address output =
+  -> ProgramOutput a b c bad
+  -> ProgramOutput a b c bad
+thisConnector tap address output =
   { output | tasks = output.tasks ~> (tap address) }
 
 
-{-| Same as thisTap but uses Address forwarding to transform action lists in to some other target type
+{-| Same as thisConnector but uses Address forwarding to transform action lists in to some other target type
 for your address. -}
-thisForwardTap : OrbiterTap bad a -> Signal.Address target -> (List a -> target) -> OrbiterOutput a b c bad -> OrbiterOutput a b c bad
-thisForwardTap tap address f output =
-  thisTap tap (Signal.forwardTo address f) output
+thisForwardConnector : ProgramConnector bad a -> Signal.Address target -> (List a -> target) -> ProgramOutput a b c bad -> ProgramOutput a b c bad
+thisForwardConnector tap address f output =
+  thisConnector tap (Signal.forwardTo address f) output
 
 {-| This is the most essential tap for almost any application. It routes the actions resulting from your TaskDispatchment output back to the program's main address. -}
-itself : OrbiterOutput a b c bad -> OrbiterOutput a b c bad
+itself : ProgramOutput a b c bad -> ProgramOutput a b c bad
 itself output =
-  thisTap successTap_ output.address output
+  thisConnector successConnector_ output.address output
 
 {-| Same as itself, but execute action lists asynchronously, such that they may be interspersed with other action lists. -}
-itselfAsync : OrbiterOutput a b c bad -> OrbiterOutput a b c bad
+itselfAsync : ProgramOutput a b c bad -> ProgramOutput a b c bad
 itselfAsync output =
-  thisTap asyncSuccessTap_ output.address output
+  thisConnector asyncSuccessConnector_ output.address output
 
 {-| Route the resulting actions from your TaskDispatchments to some action list address. -}
-thisAddress : Signal.Address (List a) -> OrbiterOutput a b c bad -> OrbiterOutput a b c bad
+thisAddress : Signal.Address (List a) -> ProgramOutput a b c bad -> ProgramOutput a b c bad
 thisAddress address output =
-  thisTap successTap_ address output
+  thisConnector successConnector_ address output
 
 {-| Same as thisAddress, but with forwarding. -}
-thisForwardAddress : Signal.Address target -> (List a -> target) -> OrbiterOutput a b c bad -> OrbiterOutput a b c bad
+thisForwardAddress : Signal.Address target -> (List a -> target) -> ProgramOutput a b c bad -> ProgramOutput a b c bad
 thisForwardAddress address f output =
-  thisForwardTap successTap_ address f output
+  thisForwardConnector successConnector_ address f output
 
 {-| Same as thisAddress, but asynchronously as described above. -}
-thisAddressAsync : Signal.Address (List a) -> OrbiterOutput a b c bad -> OrbiterOutput a b c bad
+thisAddressAsync : Signal.Address (List a) -> ProgramOutput a b c bad -> ProgramOutput a b c bad
 thisAddressAsync address output =
-  thisTap asyncSuccessTap_ address output
+  thisConnector asyncSuccessConnector_ address output
 
 {-| Same as thisForwardAddress, but asynchronously as described above. -}
-thisForwardAddressAsync : Signal.Address target -> (List a -> target) -> OrbiterOutput a b c bad -> OrbiterOutput a b c bad
+thisForwardAddressAsync : Signal.Address target -> (List a -> target) -> ProgramOutput a b c bad -> ProgramOutput a b c bad
 thisForwardAddressAsync address f output =
-  thisForwardTap asyncSuccessTap_ address f output
+  thisForwardConnector asyncSuccessConnector_ address f output
 
 {-| Transform any errors in to lists of actions, then route them to the address. -}
-thisErrorTap : Signal.Address (List a) -> (bad -> List a) -> OrbiterOutput a b c bad -> OrbiterOutput a b c bad
-thisErrorTap address handler output =
-  thisTap (flip errorTap_ handler) address output
+thisErrorConnector : Signal.Address (List a) -> (bad -> List a) -> ProgramOutput a b c bad -> ProgramOutput a b c bad
+thisErrorConnector address handler output =
+  thisConnector (flip errorConnector_ handler) address output
 
 {-| Same semantics as `itself`, but for errors. Error taps do not have an asynchronous alternative. -}
-it'sErrorTap : (bad -> List a) -> OrbiterOutput a b c bad -> OrbiterOutput a b c bad
-it'sErrorTap handler output =
-  thisErrorTap output.address handler output
+it'sErrorConnector : (bad -> List a) -> ProgramOutput a b c bad -> ProgramOutput a b c bad
+it'sErrorConnector handler output =
+  thisErrorConnector output.address handler output

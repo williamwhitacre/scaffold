@@ -1,16 +1,16 @@
 {-
 
-EXAMPLE 0: How to use the basic features of Core in one example. Makes a counter with an
-automatic mode that uses the OrbiterTask utilities, and sets up a basic Orbiter. The architectural
-weight needed to initially set up an Orbiter is a bit heavier than that which you'd see in a
-StartApp application. The added flexibility of the Orbiter is visible here, but not very heavily
+EXAMPLE 0: How to use the basic features of App in one example. Makes a counter with an
+automatic mode that uses the ProgramTask utilities, and sets up a basic Program. The architectural
+weight needed to initially set up an Program is a bit heavier than that which you'd see in a
+StartApp application. The added flexibility of the Program is visible here, but not very heavily
 excercised. NOTE also that this does not use the more flexible `defProgram'` which provides stage.
 This is appropriate for any endpoint simple controls that do not manage collections of state, and
 mirrors the structure of StartApp in this way.
 
 -}
 
-import Gigan.Core exposing (..)
+import Scaffold.App exposing (..)
 
 -- We are using HTML here to avoid introducing too many unfamiliar things at once.
 import Html exposing (Html, div, span, button, text)
@@ -44,14 +44,14 @@ type alias Model =
 
 
 -- This function produces a TaskDispatchment from the current model which either has no tasks to
--- run in the case that the auto mode is not enabled, otherwise it produces an OrbiterTask using
--- the blindOrbiterAgent, which invokes the AutoDo action after sleeping for one second.
+-- run in the case that the auto mode is not enabled, otherwise it produces an ProgramTask using
+-- the blindProgramAgent, which invokes the AutoDo action after sleeping for one second.
 autoIncrement : Model -> TaskDispatchment () Action
 autoIncrement model =
   if not model.stop && model.auto /= 0 then
     -- we are in auto mode with no user request to stop dispatch one task that always executes
     -- AutoDo exactly one second in to the future.
-    dispatchTasks [orbiterBlindAgent (orbiterAgentSuccess [AutoDo]) (Task.sleep 1000)]
+    dispatchTasks [programBlindAgent (programAgentSuccess [AutoDo]) (Task.sleep 1000)]
   else
     -- do nothing because we are in auto mode. NOTE: an empty task dispatchment will not result in
     -- the execution of any tasks, not even a do-nothing task.
@@ -59,7 +59,7 @@ autoIncrement model =
 
 
 -- We are using Html for the output given that the Layout module relies on the now depreciated
--- Graphics.Element system. Layout is rewritten to use Html internally in the updated Scaffold
+-- Graphics.Element symachine. Layout is rewritten to use Html internally in the updated Scaffold
 -- package.
 styleOut : Html.Attribute
 styleOut =
@@ -144,13 +144,13 @@ update action now model =
       |> updated
 
 
--- Set up the orbiter.
-output : OrbiterOutput Action Model Html ()
+-- Set up the program.
+output : ProgramOutput Action Model Html ()
 output =
   (defProgram present update model0)
     `withSequenceInputs`
       [ Signal.map (CurrentWidth >> flip (::) []) Window.width ]
-    `orbitsWithWork`
+    `runWithWork`
       nilTask
     +--> itself
 
@@ -160,6 +160,6 @@ main : Signal Html.Html
 main = output.view'
 
 
--- Use sieve to run the concrete task output of the orbiter.
+-- Use appOutputPort to run the concrete task output of the program.
 port sink : Signal (Task z ())
-port sink = sieve output
+port sink = appOutputPort output

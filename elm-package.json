@@ -1,17 +1,17 @@
 {
     "version": "4.0.6",
-    "summary": "Scaffold - Elm Boilerplate Reduction",
-    "repository": "https://github.com/williamwhitacre/gigan.git",
+    "summary": "Scaffold - Elm Boilerplate Reduction For Production Apps",
+    "repository": "https://github.com/williamwhitacre/scaffold.git",
     "license": "",
     "source-directories": [
         "./src"
     ],
     "exposed-modules": [
-        "Gigan.Core",
-        "Gigan.Error",
-        "Gigan.Layout",
-        "Gigan.Stem",
-        "Gigan.Knowledge"
+        "Scaffold.App",
+        "Scaffold.Error",
+        "Scaffold.Layout",
+        "Scaffold.Machine",
+        "Scaffold.Resource"
     ],
     "dependencies": {
         "Apanatshka/elm-signal-extra": "5.7.0 <= v < 6.0.0",

@@ -28,24 +28,24 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 --}
 
 
-module Gigan.Knowledge
+module Scaffold.Resource
 
-  (Knowledge,
-  KnowledgeBase,
-  KnowledgeRecord,
-  KnowledgeRecordStub,
-  KnowledgeBaseDelta,
+  (Resource,
+  ResourceBase,
+  ResourceRecord,
+  ResourceRecordStub,
+  ResourceBaseDelta,
 
-  BaseKnowledge,
-  RecordKnowledge,
+  BaseResource,
+  RecordResource,
 
   Remote, RemoteMap,
 
   RemoteConfig, RemoteMapConfig,
   QueryTask,
 
-  knowledgeOf, forbiddenKnowledge, pendingKnowledge, undecidedKnowledge,
-  unknownKnowledge, voidKnowledge, knowledgeDo,
+  defResource, forbiddenResource, pendingResource, undecidedResource,
+  unknownResource, voidResource, remoteResource,
 
   maybeOr, resultOr,
 
@@ -81,10 +81,10 @@ module Gigan.Knowledge
 
   where
 
-{-| This module contains the "Knowledge Base" system, which is in essence a unique compromise between data binding
+{-| This module contains the "Resource Base" symachine, which is in essence a unique compromise between data binding
 and explicit fetching and writing.
 
-A Knowledge is datum whose state is concretely fuzzy because it must be retrieved from
+A Resource is datum whose state is concretely fuzzy because it must be retrieved from
 or synchronized with one or more remote services. The bulk of these functions are intended to be used together as a DSL
 that provides very concise reductions and conditionally executed contingencies for bad data, as well as very
 succinct mapping from fuzzy knowledge states on to concrete views.
@@ -94,42 +94,42 @@ on to pending remote operation results, so that longer running asynchronous tran
 can be composed as deeply as desired. The documentation is underway.
 
 # Definitions
-@docs Knowledge, KnowledgeBase, KnowledgeRecord, KnowledgeRecordStub, KnowledgeBaseDelta
+@docs Resource, ResourceBase, ResourceRecord, ResourceRecordStub, ResourceBaseDelta
 
-# Aliases for Knowledge of a KnowledgeBase or a KnowledgeRecord
-@docs BaseKnowledge, RecordKnowledge
+# Aliases for Resource of a ResourceBase or a ResourceRecord
+@docs BaseResource, RecordResource
 
 # Remote Synchronization
 @docs Remote, RemoteMap, RemoteConfig, RemoteMapConfig, QueryTask
 
-# Knowledge constructors
-@docs knowledgeOf, forbiddenKnowledge, pendingKnowledge, undecidedKnowledge, unknownKnowledge, voidKnowledge, knowledgeDo
+# Resource constructors
+@docs defResource, forbiddenResource, pendingResource, undecidedResource, unknownResource, voidResource, remoteResource
 
-# Knowledge from Existing non-determinant Types
+# Resource from Existing non-determinant Types
 @docs maybeOr, resultOr
 
-# Make Conditional Assumptions about Knowledge
+# Make Conditional Assumptions about Resource
 @docs assumeIf, assumeIfNot, assumeIfNow, assumeInCase, assumeInCaseNow, decideBy, doOperation, maybeKnownNow, reduceNotKnownNowTo, otherwise
 
-# Transforming Knowledge
+# Transforming Resource
 @docs therefore, within
 
-# Conditionally Dispatch Operations on Knowledge
+# Conditionally Dispatch Operations on Resource
 @docs dispatchIf, dispatchIfNot, dispatchInCase, dispatchInCaseNow
 
-# Basic Knowledge Predicates
+# Basic Resource Predicates
 @docs isUnknown, isNotUnknown, isPending, isNotPending, isUndecided, isNotUndecided, isForbidden, isNotForbidden, isVoid, isNotVoid, isNil, isNotNil, isKnown, isNotKnown, isOperation, isNotOperation
 
-# Integrate Knowledge
+# Integrate Resource
 @docs knowledgeIntegrate, knowledgeQuery, knowledgeUpdate
 
-# Transforming Knowledge Base Deltas
+# Transforming Resource Base Deltas
 @docs baseDeltaMap, baseDeltaTherefore
 
-# Knowledge Base Operations
+# Resource Base Operations
 @docs base, baseAt, baseDo, baseErrorHandler, baseIntegrate, baseMember, baseQuery, baseUpdate
 
-# Knowledge Record Operations
+# Resource Record Operations
 @docs record, recordSet, recordAt, recordAtKey, recordBinding, recordContent, recordDo, recordErrorHandler, recordField, recordIntegrate, recordQuery, recordUpdate
 
 # Configuration
@@ -137,8 +137,8 @@ can be composed as deeply as desired. The documentation is underway.
 
 -}
 
-import Gigan.Core exposing (..)
-import Gigan.Error as Error
+import Scaffold.App exposing (..)
+import Scaffold.Error as Error
 
 import Signal
 import Task exposing (Task, andThen, onError)
@@ -147,22 +147,22 @@ import Dict exposing (Dict)
 
 
 {-| This is a Task which represents some kind of synchronization with remote data. It can also easily
-be used for long running arbitrary computations, too. It produces a Gigan Error or a Knowledge. -}
-type alias Remote euser v = Task (Error.Error euser) (Knowledge euser v)
+be used for long running arbitrary computations, too. It produces a Gigan Error or a Resource. -}
+type alias Remote euser v = Task (Error.Error euser) (Resource euser v)
 
 {-| This is a dictionary which represents a collection of Remote tasks which will be executed against
-a KnowledgeBase or a KnowledgeRecord. -}
+a ResourceBase or a ResourceRecord. -}
 type alias RemoteMap euser comparable v = Dict comparable (Remote euser v)
 
-type alias BaseImpl euser comparable v = Dict comparable (Knowledge euser v)
-type alias BaseDeltaImpl euser comparable v = (comparable, Knowledge euser v)
+type alias BaseImpl euser comparable v = Dict comparable (Resource euser v)
+type alias BaseDeltaImpl euser comparable v = (comparable, Resource euser v)
 
 {-| QueryTask is an opaque task that executes a Remote or a RemoteMap and sends the resulting deltas
-to the configured address for the Knowledge, KnowledgeBase, or KnowledgeRecord. -}
+to the configured address for the Resource, ResourceBase, or ResourceRecord. -}
 type alias QueryTask never = Task never ()
 
 {-| A knowledge item. -}
-type Knowledge euser v =
+type Resource euser v =
   Unknown
   | Pending
   -- This is what is done if there appears to be no reason you shouldn't be _allowed_ to look at the
@@ -186,31 +186,31 @@ type Knowledge euser v =
 
 
 {-| Configures address to send remote results to, and an error handler for promoting Errors in to
-Knowledge. The default error handler simply promotes errors to Undecided. -}
+Resource. The default error handler simply promotes errors to Undecided. -}
 type alias RemoteConfig euser v =
-  { address : Signal.Address (Knowledge euser v)
-  , errorHandler : Error.Error euser -> Knowledge euser v
+  { address : Signal.Address (Resource euser v)
+  , errorHandler : Error.Error euser -> Resource euser v
   }
 
 
 {-| Configures an address per key to send remote results to, and an error handler per key for
-promoting Errors in to Knowledge. The default error handler simply promotes errors to Undecided.
-The default configuration proxies a single address which accepts a KnowledgeBaseDelta. -}
+promoting Errors in to Resource. The default error handler simply promotes errors to Undecided.
+The default configuration proxies a single address which accepts a ResourceBaseDelta. -}
 type alias RemoteMapConfig euser comparable v =
-  { addressOf : comparable -> Signal.Address (Knowledge euser v)
-  , errorHandlerOf : comparable -> Error.Error euser -> Knowledge euser v
+  { addressOf : comparable -> Signal.Address (Resource euser v)
+  , errorHandlerOf : comparable -> Error.Error euser -> Resource euser v
   }
 
 
-{-| This represents a change in Knowledge, a KnowledgeBase, or a KnowledgeRecord. -}
-type alias KnowledgeBaseDelta euser comparable v =
+{-| This represents a change in Resource, a ResourceBase, or a ResourceRecord. -}
+type alias ResourceBaseDelta euser comparable v =
   BaseDeltaImpl euser comparable v
 
 
-{-| A knowledge base has a dictionary of Knowledge. Use this to represent arbitrary collections of
+{-| A knowledge base has a dictionary of Resource. Use this to represent arbitrary collections of
 remote data with a uniform schema. You can support schemaless data with JSON, but that should really
 only be done if you absolutely must, since it adds quite a bit of encoder/decoder overhead. -}
-type alias KnowledgeBase euser comparable v =
+type alias ResourceBase euser comparable v =
   { base : BaseImpl euser comparable v
   , deltas : BaseImpl euser comparable v
   , deltaSink : Signal.Address (BaseDeltaImpl euser comparable v)
@@ -221,45 +221,45 @@ type alias KnowledgeBase euser comparable v =
 {-| This is a wrapper for knowledge bases that are finite in size, and have a collection of
 differently typed fields. It is best for records which may only be partially known. A concrete
 example of this would be a user's personal information, where everything they have hidden should
-come back as `forbiddenKnowledge`. -}
-type alias KnowledgeRecord euser userrecord comparable v =
-  { kbase : KnowledgeBase euser comparable v
-  , writes : Dict comparable (Knowledge euser v -> userrecord -> userrecord)
-  , reads : Dict comparable (userrecord -> Knowledge euser v)
+come back as `forbiddenResource`. -}
+type alias ResourceRecord euser userrecord comparable v =
+  { kbase : ResourceBase euser comparable v
+  , writes : Dict comparable (Resource euser v -> userrecord -> userrecord)
+  , reads : Dict comparable (userrecord -> Resource euser v)
   , record : userrecord
   }
 
 
 {-| A knowledge record stub represents how to manage a knowledge record, with the record itself
 omitted. This type is outputted by the `record` function. Setting this for the first time using
-`recordSet` will result in a proper KnowledgeRecord.  -}
-type alias KnowledgeRecordStub euser userrecord comparable v =
-  { kbase : KnowledgeBase euser comparable v
-  , writes : Dict comparable (Knowledge euser v -> userrecord -> userrecord)
-  , reads : Dict comparable (userrecord -> Knowledge euser v)
+`recordSet` will result in a proper ResourceRecord.  -}
+type alias ResourceRecordStub euser userrecord comparable v =
+  { kbase : ResourceBase euser comparable v
+  , writes : Dict comparable (Resource euser v -> userrecord -> userrecord)
+  , reads : Dict comparable (userrecord -> Resource euser v)
   }
 
 
--- Interpret KnowledgeBases and KnowledgeRecords as types of Knowledge. This enables Elm
--- Architecture style nesting, but in the context of dynamic collections of Knowledge.
+-- Interpret ResourceBases and ResourceRecords as types of Resource. This enables Elm
+-- Architecture style nesting, but in the context of dynamic collections of Resource.
 
-{-| Knowledge of a KnowledgeBase. This adds basic support for nesting KnowledgeBase and KnowledgeBase
+{-| Resource of a ResourceBase. This adds basic support for nesting ResourceBase and ResourceBase
 operations using `within`, which approximates the active record pattern as well as I can in Elm so
 far. -}
-type alias BaseKnowledge euser comparable v =
-  Knowledge (KnowledgeBase euser comparable v)
+type alias BaseResource euser comparable v =
+  Resource (ResourceBase euser comparable v)
 
-{-| Knowledge of a KnowledgeRecord. This adds support for nesting KnowledgeRecord and KnowledgeRecord
+{-| Resource of a ResourceRecord. This adds support for nesting ResourceRecord and ResourceRecord
 operations using `within`, which approximates the active record pattern as well as I can in Elm so
 far. -}
-type alias RecordKnowledge euser userrecord comparable v =
-  Knowledge (KnowledgeRecord euser userrecord comparable v)
+type alias RecordResource euser userrecord comparable v =
+  Resource (ResourceRecord euser userrecord comparable v)
 
 
 
 {-| Specifies a RemoteConfig with which to close off a remote operation by sending it's results or an
 error describing it's failure to the given address. -}
-remoteConfig : Signal.Address (Knowledge euser v) -> RemoteConfig euser v
+remoteConfig : Signal.Address (Resource euser v) -> RemoteConfig euser v
 remoteConfig address =
   { address = address
   , errorHandler = Undecided -- Default error handler promotes errors to instances of undecided.
@@ -270,53 +270,53 @@ remoteConfig address =
 handler should be provided such that any errors not trapped by a decideBy application still
 gracefully recover. By default, a valid knowledge is produced from any error by promoting that
 Error to Undecided. -}
-remoteErrorConfig : (Error.Error euser -> Knowledge euser v) -> RemoteConfig euser v -> RemoteConfig euser v
+remoteErrorConfig : (Error.Error euser -> Resource euser v) -> RemoteConfig euser v -> RemoteConfig euser v
 remoteErrorConfig handler config =
   { config
   | errorHandler = handler
   }
 
 
-{-| True if the knowledge is unknownKnowledge. -}
-isUnknown : Knowledge euser v -> Bool
+{-| True if the knowledge is unknownResource. -}
+isUnknown : Resource euser v -> Bool
 isUnknown kb =
   case kb of
     Unknown -> True
     _ -> False
 
 
-{-| False if the knowledge is unknownKnowledge. -}
-isNotUnknown : Knowledge euser v -> Bool
+{-| False if the knowledge is unknownResource. -}
+isNotUnknown : Resource euser v -> Bool
 isNotUnknown = isUnknown >> not
 
 
-{-| True if the knowledge is pendingKnowledge. -}
-isPending : Knowledge euser v -> Bool
+{-| True if the knowledge is pendingResource. -}
+isPending : Resource euser v -> Bool
 isPending kb =
   case kb of
     Pending -> True
     _ -> False
 
-{-| False if the knowledge is pendingKnowledge. -}
-isNotPending : Knowledge euser v -> Bool
+{-| False if the knowledge is pendingResource. -}
+isNotPending : Resource euser v -> Bool
 isNotPending = isPending >> not
 
 
-{-| True if the knowledge is voidKnowledge. -}
-isVoid : Knowledge euser v -> Bool
+{-| True if the knowledge is voidResource. -}
+isVoid : Resource euser v -> Bool
 isVoid kb =
   case kb of
     Void -> True
     _ -> False
 
 
-{-| False if the knowledge is voidKnowledge. -}
-isNotVoid : Knowledge euser v -> Bool
+{-| False if the knowledge is voidResource. -}
+isNotVoid : Resource euser v -> Bool
 isNotVoid = isVoid >> not
 
 
-{-| True if the knowledge is unknownKnowledge or voidKnowledge. -}
-isNil : Knowledge euser v -> Bool
+{-| True if the knowledge is unknownResource or voidResource. -}
+isNil : Resource euser v -> Bool
 isNil kb =
   case kb of
     Unknown -> True
@@ -324,39 +324,39 @@ isNil kb =
     _ -> False
 
 
-{-| False if the knowledge is unknownKnowledge or voidKnowledge. -}
-isNotNil : Knowledge euser v -> Bool
+{-| False if the knowledge is unknownResource or voidResource. -}
+isNotNil : Resource euser v -> Bool
 isNotNil = isNil >> not
 
 
-{-| True if the knowledge is undecidedKnowledge. -}
-isUndecided : Knowledge euser v -> Bool
+{-| True if the knowledge is undecidedResource. -}
+isUndecided : Resource euser v -> Bool
 isUndecided kb =
   case kb of
     Undecided _ -> True
     _ -> False
 
 
-{-| False if the knowledge is undecidedKnowledge. -}
-isNotUndecided : Knowledge euser v -> Bool
+{-| False if the knowledge is undecidedResource. -}
+isNotUndecided : Resource euser v -> Bool
 isNotUndecided = isUndecided >> not
 
 
-{-| True if the knowledge is forbiddenKnowledge. -}
-isForbidden : Knowledge euser v -> Bool
+{-| True if the knowledge is forbiddenResource. -}
+isForbidden : Resource euser v -> Bool
 isForbidden kb =
   case kb of
     Forbidden _ -> True
     _ -> False
 
 
-{-| False if the knowledge is forbiddenKnowledge. -}
-isNotForbidden : Knowledge euser v -> Bool
+{-| False if the knowledge is forbiddenResource. -}
+isNotForbidden : Resource euser v -> Bool
 isNotForbidden = isForbidden >> not
 
 
 {-| True if the knowledge is a pending operation. -}
-isOperation : Knowledge euser v -> Bool
+isOperation : Resource euser v -> Bool
 isOperation kb =
   case kb of
     Operation _ -> True
@@ -364,12 +364,12 @@ isOperation kb =
 
 
 {-| False if the knowledge is a pending operation. -}
-isNotOperation : Knowledge euser v -> Bool
+isNotOperation : Resource euser v -> Bool
 isNotOperation = isOperation >> not
 
 
 {-| True if the knowledge is known. -}
-isKnown : Knowledge euser v -> Bool
+isKnown : Resource euser v -> Bool
 isKnown kb =
   case kb of
     Known _ -> True
@@ -377,7 +377,7 @@ isKnown kb =
 
 
 {-| False if the knowledge is known. -}
-isNotKnown : Knowledge euser v -> Bool
+isNotKnown : Resource euser v -> Bool
 isNotKnown = isKnown >> not
 
 
@@ -386,7 +386,7 @@ comprehend xdcr remote =
   remote `andThen` (therefore xdcr >> Task.succeed)
 
 
-catchError : (Error.Error euser -> Knowledge euser v) -> Remote euser v -> Remote euser v
+catchError : (Error.Error euser -> Resource euser v) -> Remote euser v -> Remote euser v
 catchError decider remote =
   remote `onError` (decider >> Task.succeed)
 
@@ -397,7 +397,7 @@ further operations to attempt. This allows us to compose async processing stages
 is finally reduced to a displayed or usable result as deeply and interchangably as we want to,
 provided that we always use "therefore" _first_ to lift the knowledge type out before listing
 a sequence of simple or contingent reductions. -}
-therefore : (v -> v') -> Knowledge euser v -> Knowledge euser v'
+therefore : (v -> v') -> Resource euser v -> Resource euser v'
 therefore xdcr kb =
   case kb of
     Unknown -> Unknown
@@ -420,7 +420,7 @@ This code will work on a knowledge base of base knowledges, so that's a nested r
 record pattern can be approximated like this, and I've found it extremely handy.
 
 -}
-within : (sub -> sub) -> Knowledge euser sub -> Knowledge euser sub
+within : (sub -> sub) -> Resource euser sub -> Resource euser sub
 within operation ksub =
   case ksub of
     Operation remote -> Operation (comprehend operation remote)
@@ -429,27 +429,27 @@ within operation ksub =
     _ -> ksub
 
 
--- NOTE : When one applies one of the below primitives to the an instance of Knowledge, the
+-- NOTE : When one applies one of the below primitives to the an instance of Resource, the
 -- following principal is obeyed: Any primitive which makes sense on an Undecided, Void, or Known
--- Knowledge instance _also applies to future knowledge implied by the existence of an Operation,_
+-- Resource instance _also applies to future knowledge implied by the existence of an Operation,_
 -- such that Remotes can be very cleanly chained in causal order with repeated forward
 -- applications of `dispatchIf` and `dispatchInCase`, and reduced with a declared plan just as cleanly
 -- at any future stage using `therefore`, `decideBy`, and `assumeIf`. One can freely alternate
 -- between Inquiries and causal reductions, whose most important primitives are given in respective
 -- lists above, and then pipe the future state of the knowledge back in to any part of the program
 -- using the configuration built using `knowledgeSink`, and optionally `resolvingAllBy`.
--- `knowledgeSink` takes an address of type `Signal.Address (Knowledge euser v)` and produces an
+-- `knowledgeSink` takes an address of type `Signal.Address (Resource euser v)` and produces an
 -- `RemoteConfig euser v`. We can additionally specify an error handler using `resolvingAllBy` that will
--- normalize all Error results in to Knowledge in some uniform way. The default if this is not
+-- normalize all Error results in to Resource in some uniform way. The default if this is not
 -- specified is to promote the offending Error to an Undecided.
 
 
-{-| Offer a decision on some `undecidedKnowledge kb`. Undecided knowledge is the result of some
+{-| Offer a decision on some `undecidedResource kb`. Undecided knowledge is the result of some
 problem which may or may not be in control of the client. Such knowledge may be the result of
 anything that can result in an error in your application. If this knowledge is an operation, then
 the assumption will be applied to the result of that operation.
 -}
-decideBy : (Error.Error euser -> Knowledge euser v) -> Knowledge euser v -> Knowledge euser v
+decideBy : (Error.Error euser -> Resource euser v) -> Resource euser v -> Resource euser v
 decideBy decider kb =
   case kb of
     Undecided err' -> decider err'
@@ -461,7 +461,7 @@ decideBy decider kb =
 {-| If some predicate `satisfies` is satisfied by the knowledge `kb`, then we make the following
 assumption. If this knowledge is an operation, then the assumption will be applied to
 the result of that operation. -}
-assumeIf : (Knowledge euser v -> Bool) -> v -> Knowledge euser v -> Knowledge euser v
+assumeIf : (Resource euser v -> Bool) -> v -> Resource euser v -> Resource euser v
 assumeIf satisfies assume kb =
   case kb of
     Operation remote ->
@@ -472,16 +472,16 @@ assumeIf satisfies assume kb =
 
 
 {-| Negation of assumeIf. -}
-assumeIfNot : (Knowledge euser v -> Bool) -> v -> Knowledge euser v -> Knowledge euser v
+assumeIfNot : (Resource euser v -> Bool) -> v -> Resource euser v -> Resource euser v
 assumeIfNot satisfies assume kb =
   assumeIf (satisfies >> not) assume kb
 
 
-{-| If `possibleAssumption` yields some value `value'` when a Knowledge is applied, then
+{-| If `possibleAssumption` yields some value `value'` when a Resource is applied, then
 that value is used to overwrite the knowledge with an assumption `Known value'`, otherwise the
-Knowledge is unaffected. If this knowledge is an operation, then the assumption will be applied
+Resource is unaffected. If this knowledge is an operation, then the assumption will be applied
 conditionally to the result of that operation. -}
-assumeInCase : (Knowledge euser v -> Maybe v) -> Knowledge euser v -> Knowledge euser v
+assumeInCase : (Resource euser v -> Maybe v) -> Resource euser v -> Resource euser v
 assumeInCase possibleAssumption kb =
   case kb of
     Operation remote ->
@@ -494,7 +494,7 @@ assumeInCase possibleAssumption kb =
 
 {-| If some predicate `satisfies` is satisfied by the knowledge `kb`, then we make the following
 remote operation. -}
-dispatchIf : (Knowledge euser v -> Bool) -> Remote euser v -> Knowledge euser v -> Knowledge euser v
+dispatchIf : (Resource euser v -> Bool) -> Remote euser v -> Resource euser v -> Resource euser v
 dispatchIf satisfies remote kb =
   case kb of
     Operation remote ->
@@ -505,18 +505,18 @@ dispatchIf satisfies remote kb =
 
 
 {-| Negation of dispatchIf -}
-dispatchIfNot : (Knowledge euser v -> Bool) -> Remote euser v -> Knowledge euser v -> Knowledge euser v
+dispatchIfNot : (Resource euser v -> Bool) -> Remote euser v -> Resource euser v -> Resource euser v
 dispatchIfNot satisfies remote kb =
   dispatchIf (satisfies >> not) remote kb
 
 
-{-| If `possibleOperation` yields some Remote task `remote` when a Knowledge is applied, then
+{-| If `possibleOperation` yields some Remote task `remote` when a Resource is applied, then
 the knowledge is replaced by the knowledge `doOperation remote`, otherwise the knowledge is
 unaffected. If this knowledge is an operation, then the result of that operation will be used as
 the input to the provided function. In this way, operations can be chained arbitrarily deep,
 but in a manner that helpfully abstracts away whether we are still waiting or already have the
 result in the composition. -}
-dispatchInCase : (Knowledge euser v -> Maybe (Remote euser v)) -> Knowledge euser v -> Knowledge euser v
+dispatchInCase : (Resource euser v -> Maybe (Remote euser v)) -> Resource euser v -> Resource euser v
 dispatchInCase possibleOperation kb =
   case kb of
     Operation remote ->
@@ -532,14 +532,14 @@ dispatchInCase possibleOperation kb =
 -- mapping the state of the content to an actual display.
 
 {-| If a knowledge is known, then give Just it's value, otherwise Nothing. -}
-maybeKnownNow : Knowledge euser v' -> Maybe v'
+maybeKnownNow : Resource euser v' -> Maybe v'
 maybeKnownNow kb' =
   case kb' of
     Known x' -> Just x'
     _ -> Nothing
 
 {-| If the predicate is satisfied, replace the knowledge with some known value. -}
-assumeIfNow : (Knowledge euser v' -> Bool) -> v' -> Knowledge euser v' -> Knowledge euser v'
+assumeIfNow : (Resource euser v' -> Bool) -> v' -> Resource euser v' -> Resource euser v'
 assumeIfNow satisfies assumption kb' =
   if satisfies kb' then Known assumption else kb'
 
@@ -548,8 +548,8 @@ assumeIfNow satisfies assumption kb' =
 some pending remote operation. Concretely, we want this in the case that we are doing model to view
 reductions because a pending operation should still have some concrete visible representation, such
 as an ajax loader symbol. Of course, one should still correctly call *Integrate so that an operation
-is always a `pendingKnowledge` by the time it gets past the `stage` step. -}
-assumeInCaseNow : (Knowledge euser v' -> Maybe v') -> Knowledge euser v' -> Knowledge euser v'
+is always a `pendingResource` by the time it gets past the `stage` step. -}
+assumeInCaseNow : (Resource euser v' -> Maybe v') -> Resource euser v' -> Resource euser v'
 assumeInCaseNow possibleAssumption kb' =
   Maybe.map Known (possibleAssumption kb')
   |> Maybe.withDefault kb'
@@ -558,7 +558,7 @@ assumeInCaseNow possibleAssumption kb' =
 {-| This is the counterpart to dispatchInCase which does _not_ abstract away whether or not this is
 some pending remote operation. This is useful in the case that we don't care what's going on right
 now. We'd rather issue some operation, regardless. -}
-dispatchInCaseNow : (Knowledge euser v -> Maybe (Remote euser v)) -> Knowledge euser v -> Knowledge euser v
+dispatchInCaseNow : (Resource euser v -> Maybe (Remote euser v)) -> Resource euser v -> Resource euser v
 dispatchInCaseNow possibleOperation kb =
   case kb of
     Operation remote ->
@@ -569,10 +569,10 @@ dispatchInCaseNow possibleOperation kb =
       |> Maybe.withDefault kb
 
 
-{-| This is the special reduction we use to collapse away the Knowledge type, determining a final
+{-| This is the special reduction we use to collapse away the Resource type, determining a final
 value to work with. While more pedantically named, I find it leaves something to be desired
 aesthetically, so I use `otherwise` for the same task. -}
-reduceNotKnownNowTo : v' -> Knowledge euser v' -> v'
+reduceNotKnownNowTo : v' -> Resource euser v' -> v'
 reduceNotKnownNowTo assumption kb' =
   case kb' of
     Known x' -> x'
@@ -580,70 +580,70 @@ reduceNotKnownNowTo assumption kb' =
 
 
 {-| Preferred shorthand for `reduceNotKnownNowTo`. -}
-otherwise : v' -> Knowledge euser v' -> v'
+otherwise : v' -> Resource euser v' -> v'
 otherwise = reduceNotKnownNowTo
 
 
 {-| Somthing that's totally unknown. This is the default result of retrieving an element that has
 no representation in a knowledge base, but also has obvious other uses as a placeholder that is
 typely more powerful than Result or Maybe for production data management. -}
-unknownKnowledge : Knowledge euser v
-unknownKnowledge = Unknown
+unknownResource : Resource euser v
+unknownResource = Unknown
 
 
 {-| Something on which knowledge is still pending. The most conforming way to use this is to not
 use it directly. Calling *Integrate should be done after every update sequence during staging, which
-results in all operations in a knowledge base being replaced with pendingKnowledge. If you stick to
-this, the presence of pendingKnowledge is a guarantee you'll be getting a delta back about it
+results in all operations in a knowledge base being replaced with pendingResource. If you stick to
+this, the presence of pendingResource is a guarantee you'll be getting a delta back about it
 assuming your wiring's not broken. -}
-pendingKnowledge : Knowledge euser v
-pendingKnowledge = Pending
+pendingResource : Resource euser v
+pendingResource = Pending
 
 
-{-| Something that is _known not to exist_. This is not the same as unknownKnowledge or
-undecidedKnowledge. Void knowledge should arise from a remote operation which verified that there
+{-| Something that is _known not to exist_. This is not the same as unknownResource or
+undecidedResource. Void knowledge should arise from a remote operation which verified that there
 is definitely nothing there, so it is not an assumption. -}
-voidKnowledge : Knowledge euser v
-voidKnowledge = Void
+voidResource : Resource euser v
+voidResource = Void
 
 
 {-| The knowledge could not be obtained because something went wrong. This carries an error. To
-resolve `undecidedKnowledge`, one should use assumptions and or operations to map it back in to
+resolve `undecidedResource`, one should use assumptions and or operations to map it back in to
 sensible knowledge. -}
-undecidedKnowledge : Error.Error euser -> Knowledge euser v
-undecidedKnowledge = Undecided
+undecidedResource : Error.Error euser -> Resource euser v
+undecidedResource = Undecided
 
 
 {-| The knowledge could not be obtained because the user of your program should not be allowed to
-access it. This carries an error. To resolve `undecidedKnowledge`, one should use assumptions and or
+access it. This carries an error. To resolve `undecidedResource`, one should use assumptions and or
 operations to map it back in to sensible knowledge. -}
-forbiddenKnowledge : Error.Error euser -> Knowledge euser v
-forbiddenKnowledge = Forbidden
+forbiddenResource : Error.Error euser -> Resource euser v
+forbiddenResource = Forbidden
 
 
-{-| A known thing. Carries a value of type `v` for `Knowledge euser v`. `knowledgeOf` anything can be
-interpreted using `therefore` contingent upon it being a concrete `knowledgeOf` something. As described
+{-| A known thing. Carries a value of type `v` for `Resource euser v`. `defResource` anything can be
+interpreted using `therefore` contingent upon it being a concrete `defResource` something. As described
 elsewhere, `therefore` has no effect on knowledge that satisfies `isNotKnown`. -}
-knowledgeOf : v -> Knowledge euser v
-knowledgeOf = Known
+defResource : v -> Resource euser v
+defResource = Known
 
 
-{-| Map Result in to Knowledge. You'll need this if you want to roll your own knowledge base remotes,
+{-| Map Result in to Resource. You'll need this if you want to roll your own knowledge base remotes,
 which is quite easy to do due to the pluggability of the knowledge module. The function specifies how
-to interpret errors. This is important in the case that you have to deal with permissions systems.
+to interpret errors. This is important in the case that you have to deal with permissions symachines.
 Some of your errors might be due to access denial, others might be due to unintentional errors. Use
-forbiddenKnowledge and undecidedKnowledge respectively for these cases. -}
-resultOr : (Error.Error euser -> Knowledge euser v) -> Result (Error.Error euser) v -> Knowledge euser v
-resultOr errorKnowledge result =
+forbiddenResource and undecidedResource respectively for these cases. -}
+resultOr : (Error.Error euser -> Resource euser v) -> Result (Error.Error euser) v -> Resource euser v
+resultOr errorResource result =
   case result of
-    Result.Ok data -> knowledgeOf data
-    Result.Err err' -> errorKnowledge err'
+    Result.Ok data -> defResource data
+    Result.Err err' -> errorResource err'
 
 
-{-| Map Maybe in to Knowledge. Since Maybe doesn't carry errors, semantically Nothing means
+{-| Map Maybe in to Resource. Since Maybe doesn't carry errors, semantically Nothing means
 "definitely nothing". For this reason, you may want to use it something like this:
 
-    maybeOr voidKnowledge myPossibleThing
+    maybeOr voidResource myPossibleThing
 
 If you implement an operation that uses some existing code that returns a Maybe, that would be a
 good place to use this. Just be mindful that this _does not give you the power to handle errors_.
@@ -651,57 +651,57 @@ Result should always be preferred in the case that there is any chance of things
 `resultOr` should definitely see a lot more mileage in a production app that deals with lots of
 unpredictable data.
 -}
-maybeOr : Knowledge euser v -> Maybe v -> Knowledge euser v
-maybeOr nothingKnowledge maybeValue =
+maybeOr : Resource euser v -> Maybe v -> Resource euser v
+maybeOr nothingResource maybeValue =
   Maybe.map Known maybeValue
-  |> Maybe.withDefault nothingKnowledge
+  |> Maybe.withDefault nothingResource
 
 
 {-| Define knowledge contingent on the future completion of some arbitrary operation. This is how
 we hook up knowledge bases to sources of content. -}
-doOperation : Remote euser v -> Knowledge euser v
+doOperation : Remote euser v -> Resource euser v
 doOperation = Operation
 
 
 {-| Do something to a knowledge. There is an ignored comparable argument here. This merely exists so
-that the form of `knowledgeDo` is isomorphic to the form of `baseDo` and `recordDo`. -}
-knowledgeDo : (Knowledge euser v -> Knowledge euser v) -> comparable -> Knowledge euser v -> Knowledge euser v
-knowledgeDo transform _ kb =
+that the form of `remoteResource` is isomorphic to the form of `baseDo` and `recordDo`. -}
+remoteResource : (Resource euser v -> Resource euser v) -> comparable -> Resource euser v -> Resource euser v
+remoteResource transform _ kb =
   transform kb
 
 
 {-| Update knowledge with an incoming delta. Again, we ignore the comparable component of the
 knowledge base delta, but accept it to simplify the types. -}
-knowledgeUpdate : KnowledgeBaseDelta euser comparable v -> Knowledge euser v -> Knowledge euser v
+knowledgeUpdate : ResourceBaseDelta euser comparable v -> Resource euser v -> Resource euser v
 knowledgeUpdate (_, kb') kb = kb'
 
 
 {-| Given some configuration and a knowledge, produce Just an opaque query task or Nothing
 when the knowledge is an operation or the knowledge is not an operation respectively. -}
-knowledgeQuery : RemoteConfig euser v -> Knowledge euser v -> Maybe (QueryTask never)
+knowledgeQuery : RemoteConfig euser v -> Resource euser v -> Maybe (QueryTask never)
 knowledgeQuery config kb =
   Maybe.map (declareRemoteResultDispatch_ config) (maybeRemoteTask_ kb)
 
 
-{-| Given some configuration and a knowledge, produce a pendingKnowledge in the case that the
+{-| Given some configuration and a knowledge, produce a pendingResource in the case that the
 knowledge is an operation, otherwise give the same knowledge. -}
-knowledgeIntegrate : RemoteConfig euser v -> Knowledge euser v -> Knowledge euser v
+knowledgeIntegrate : RemoteConfig euser v -> Resource euser v -> Resource euser v
 knowledgeIntegrate config kb =
   if isOperation kb then Pending else kb
 
 
 {-- KNOWLEDGE BASE --}
 
--- Knowledge base is configured with an address to send deltas to.
+-- Resource base is configured with an address to send deltas to.
 -- When one requires contacting the outside information source, an Operation,
 -- one possibly gets a task for each recompute of the program where that task dispatches the
--- fetch or compute operations given as remote operations. Any Operation Knowledge items produce their
--- respective tasks, which send their results to the KnowledgeBase's address. These tasks are
+-- fetch or compute operations given as remote operations. Any Operation Resource items produce their
+-- respective tasks, which send their results to the ResourceBase's address. These tasks are
 -- always dispatched in parallel by folding the task list by spawn ... andThen.
 
 {-| Create a new knowledge base. This takes an address which accepts knowledge base deltas in sequence.
 Currently, you are responsible for dropping irrelevant deltas. -}
-base : Signal.Address (KnowledgeBaseDelta euser comparable v) -> KnowledgeBase euser comparable v
+base : Signal.Address (ResourceBaseDelta euser comparable v) -> ResourceBase euser comparable v
 base address =
   { base = Dict.empty
   , deltas = Dict.empty
@@ -711,11 +711,11 @@ base address =
 
 
 {-| Add an error handler to a knowledge base to replace the default error handler. The default error
-handler simply promotes errors to undecidedKnowledge. You may way to give a definition in your own
-error handler that distinguishes between undecidedKnowledge and forbiddenKnowledge. No promotion to
-forbiddenKnowledge is given by default because there is not sane default behavior that covers
+handler simply promotes errors to undecidedResource. You may way to give a definition in your own
+error handler that distinguishes between undecidedResource and forbiddenResource. No promotion to
+forbiddenResource is given by default because there is not sane default behavior that covers
 the general case. -}
-baseErrorHandler : (Error.Error euser -> Knowledge euser v) -> KnowledgeBase euser comparable v -> KnowledgeBase euser comparable v
+baseErrorHandler : (Error.Error euser -> Resource euser v) -> ResourceBase euser comparable v -> ResourceBase euser comparable v
 baseErrorHandler errorHandler kbase =
   { kbase
   | config = baseRemoteConfig_ kbase.deltaSink errorHandler
@@ -723,7 +723,7 @@ baseErrorHandler errorHandler kbase =
 
 
 {-| Get the knowledge at a given key from the knowledge base. -}
-baseAt : comparable -> KnowledgeBase euser comparable v -> Knowledge euser v
+baseAt : comparable -> ResourceBase euser comparable v -> Resource euser v
 baseAt key kbase =
   if baseMember_ key kbase.deltas then
     baseAt_ key kbase.deltas
@@ -732,12 +732,12 @@ baseAt key kbase =
 
 
 {-| Determine if there is some knowledge at a given key that is not unknown. -}
-baseMember : comparable -> KnowledgeBase euser comparable v -> Bool
+baseMember : comparable -> ResourceBase euser comparable v -> Bool
 baseMember key = baseAt key >> isNotUnknown
 
 
 {-| Use one of the many knowledge manipulation primitives on the knowledge at a particular location in a knowledge base. -}
-baseDo : (Knowledge euser v -> Knowledge euser v) -> comparable -> KnowledgeBase euser comparable v -> KnowledgeBase euser comparable v
+baseDo : (Resource euser v -> Resource euser v) -> comparable -> ResourceBase euser comparable v -> ResourceBase euser comparable v
 baseDo transform key kbase =
   let
     (_, kb') =
@@ -754,22 +754,22 @@ baseDo transform key kbase =
 {-| Transform a knowledge base delta using `therefore`. This is very useful for mapping a signal of
 deltas on to multiple knowledge types, then maintaining several synchronized knowledge bases very
 efficiently. -}
-baseDeltaTherefore : (v -> v') -> KnowledgeBaseDelta euser comparable v -> KnowledgeBaseDelta euser comparable v'
+baseDeltaTherefore : (v -> v') -> ResourceBaseDelta euser comparable v -> ResourceBaseDelta euser comparable v'
 baseDeltaTherefore xdcr (key, kb') =
   (key, therefore xdcr kb')
 
 
 {-| Transform a knowledge base delta using any knowledge primitive that does not change the knowledge
-type. This is the meat and potatoes of KnowledgeBase. This can be used for operations and any of the
+type. This is the meat and potatoes of ResourceBase. This can be used for operations and any of the
 reductions. -}
-baseDeltaMap : (Knowledge euser v -> Knowledge euser v) -> KnowledgeBaseDelta euser comparable v -> KnowledgeBaseDelta euser comparable v
+baseDeltaMap : (Resource euser v -> Resource euser v) -> ResourceBaseDelta euser comparable v -> ResourceBaseDelta euser comparable v
 baseDeltaMap transform (key, kb') =
   (key, transform kb')
 
 
 {-| Apply a knowledge base delta to the knowledge base. You are responsible for determining the order
 of the updates. -}
-baseUpdate : KnowledgeBaseDelta euser comparable v -> KnowledgeBase euser comparable v -> KnowledgeBase euser comparable v
+baseUpdate : ResourceBaseDelta euser comparable v -> ResourceBase euser comparable v -> ResourceBase euser comparable v
 baseUpdate (key, kb') kbase =
   { kbase
   | deltas = Dict.insert key kb' kbase.deltas
@@ -780,15 +780,15 @@ baseUpdate (key, kb') kbase =
 Just an opaque query task or Nothing in the case that no operations need to be done. Note that this
 will only traverse the knowledge which has changed since the last call to `baseIntegrate`, so this
 scales quite well to large knowledge bases. -}
-baseQuery : KnowledgeBase euser comparable v -> Maybe (QueryTask never)
+baseQuery : ResourceBase euser comparable v -> Maybe (QueryTask never)
 baseQuery kbase =
   baseDeltaDictQuery_ kbase.config kbase.deltas
 
 
-{-| Transform all new operations in to `pendingKnowledge` across the knowledge base. Note that this
+{-| Transform all new operations in to `pendingResource` across the knowledge base. Note that this
 will only traverse the knowledge which has changed since the last call to `baseIntegrate`, so this
 scales quite well to large knowledge bases. -}
-baseIntegrate : KnowledgeBase euser comparable v -> KnowledgeBase euser comparable v
+baseIntegrate : ResourceBase euser comparable v -> ResourceBase euser comparable v
 baseIntegrate kbase =
   { kbase
   | base = baseDeltaDictIntegrate_ kbase.deltas kbase.base
@@ -803,7 +803,7 @@ baseIntegrate kbase =
 of the record according to the `recordField` definitions you give. A knowledge record stub is not
 yet completed with a concrete userrecord. Use this in your definitions. Create instances of your
 knowledge record type by using `recordSet` on the result of `record`. -}
-record : Signal.Address (KnowledgeBaseDelta euser comparable v) -> KnowledgeRecordStub euser userrecord comparable v
+record : Signal.Address (ResourceBaseDelta euser comparable v) -> ResourceRecordStub euser userrecord comparable v
 record address =
   { kbase = base address
   , writes = Dict.empty
@@ -816,11 +816,11 @@ knowledge record stub for the first time. The second usage is likely to be more 
 recordSet
   :  userrecord
   -> { k
-     | kbase : KnowledgeBase euser comparable v
-     , writes : Dict comparable (Knowledge euser v -> userrecord -> userrecord)
-     , reads : Dict comparable (userrecord -> Knowledge euser v)
+     | kbase : ResourceBase euser comparable v
+     , writes : Dict comparable (Resource euser v -> userrecord -> userrecord)
+     , reads : Dict comparable (userrecord -> Resource euser v)
      }
-  -> KnowledgeRecord euser userrecord comparable v
+  -> ResourceRecord euser userrecord comparable v
 recordSet rec kstub =
   recordBaseSet_
     { kbase = kstub.kbase
@@ -851,11 +851,11 @@ an example:
 
     .....
 
-    myKnowledgeRecord =
+    myResourceRecord =
       record address { foo = 42, bar = "answer" } |> myRecordFields
 
 -}
-recordField : (Knowledge euser v -> userrecord -> userrecord) -> (userrecord -> Knowledge euser v) -> comparable -> KnowledgeRecord euser userrecord comparable v -> KnowledgeRecord euser userrecord comparable v
+recordField : (Resource euser v -> userrecord -> userrecord) -> (userrecord -> Resource euser v) -> comparable -> ResourceRecord euser userrecord comparable v -> ResourceRecord euser userrecord comparable v
 recordField write' read' key krecord =
   { krecord
   | writes = Dict.insert key write' krecord.writes
@@ -863,12 +863,12 @@ recordField write' read' key krecord =
   }
 
 
-{-| Add an error handler to a `KnowledgeRecord` or a `KnowledgeRecordStub`. Refer to
+{-| Add an error handler to a `ResourceRecord` or a `ResourceRecordStub`. Refer to
 `baseErrorHandler` for a more detailed description of how adding error handlers works. -}
 recordErrorHandler
-  :  (Error.Error euser -> Knowledge euser v)
-  -> { k | kbase : KnowledgeBase euser comparable v }
-  -> { k | kbase : KnowledgeBase euser comparable v }
+  :  (Error.Error euser -> Resource euser v)
+  -> { k | kbase : ResourceBase euser comparable v }
+  -> { k | kbase : ResourceBase euser comparable v }
 recordErrorHandler errorHandler krecord =
   { krecord
   | kbase = baseErrorHandler errorHandler krecord.kbase
@@ -876,12 +876,12 @@ recordErrorHandler errorHandler krecord =
 
 
 {-| Get the current userrecord content of a knowledge record. -}
-recordContent : KnowledgeRecord euser userrecord comparable v -> userrecord
+recordContent : ResourceRecord euser userrecord comparable v -> userrecord
 recordContent = .record
 
 
 {-| Get the underlying knowledge base of a knowledge record. -}
-recordBinding : KnowledgeRecord euser userrecord comparable v -> KnowledgeBase euser comparable v
+recordBinding : ResourceRecord euser userrecord comparable v -> ResourceBase euser comparable v
 recordBinding = .kbase
 
 
@@ -892,27 +892,27 @@ this method to get from records. This won't compile if it's wrong. For example:
     recordAt .myFieldThatWillNotCompileIfItDoesntExist myRecord
 
 -}
-recordAt : (userrecord -> Knowledge euser v) -> KnowledgeRecord euser userrecord comparable v -> Knowledge euser v
+recordAt : (userrecord -> Resource euser v) -> ResourceRecord euser userrecord comparable v -> Resource euser v
 recordAt getter = .record >> getter
 
 
 {-| Retrieve a knowledge at the given key. If you do this, you may as well be using knowledge base.
 However, you will get the benefit of console debug messages in the case that you try to access a
 field that doesn't exist. -}
-recordAtKey : comparable -> KnowledgeRecord euser userrecord comparable v -> Knowledge euser v
+recordAtKey : comparable -> ResourceRecord euser userrecord comparable v -> Resource euser v
 recordAtKey = recordRead_
 
 
 {-| This is the knowledge record equivalent to baseUpdate for knowledge bases, using the same
 semantics. -}
-recordUpdate : KnowledgeBaseDelta euser comparable v -> KnowledgeRecord euser userrecord comparable v -> KnowledgeRecord euser userrecord comparable v
+recordUpdate : ResourceBaseDelta euser comparable v -> ResourceRecord euser userrecord comparable v -> ResourceRecord euser userrecord comparable v
 recordUpdate kbdelta krecord =
   recordWrite_ kbdelta krecord
 
 
 {-| This is the knowledge record equivalent to baseDo for knowledge bases, using the same
 semantics. -}
-recordDo : (Knowledge euser v -> Knowledge euser v) -> comparable -> KnowledgeRecord euser userrecord comparable v -> KnowledgeRecord euser userrecord comparable v
+recordDo : (Resource euser v -> Resource euser v) -> comparable -> ResourceRecord euser userrecord comparable v -> ResourceRecord euser userrecord comparable v
 recordDo transform key krecord =
   -- easy as pie! :`-D
   recordRead_ key krecord
@@ -922,22 +922,35 @@ recordDo transform key krecord =
 
 {-| This is the knowledge record equivalent to baseQuery for knowledge bases, using the same
 semantics. -}
-recordQuery : KnowledgeRecord euser userrecord comparable v -> Maybe (QueryTask never)
+recordQuery : ResourceRecord euser userrecord comparable v -> Maybe (QueryTask never)
 recordQuery =
   .kbase >> baseQuery
 
 
 {-| This is the knowledge record equivalent to baseIntegrate for knowledge bases, using the same
 semantics. -}
-recordIntegrate : KnowledgeRecord euser userrecord comparable v -> KnowledgeRecord euser userrecord comparable v
+recordIntegrate : ResourceRecord euser userrecord comparable v -> ResourceRecord euser userrecord comparable v
 recordIntegrate krecord =
   { krecord | kbase = baseIntegrate krecord.kbase }
 
 
--- NOTE : The following is the INTERNAL implementation of KnowledgeBase. Use KnowledgeBase and it's
+{-| This utility function produces a program input resource from a resource of it's model, given a partial program definition (with the model omitted).
+    It is redundant, but helps make the use case more concrete.
+
+    -- Example:
+
+    myProgramInputResource = Resource.toProgram (App.defProgram' present stage update) myModelResource
+
+
+    -}
+toProgram : (b -> ProgramInput a b c bad) -> Resource euser b -> Resource euser (ProgramInput a b c bad)
+toProgram modelInput model' = therefore modelInput model'
+
+
+-- NOTE : The following is the INTERNAL implementation of ResourceBase. Use ResourceBase and it's
 -- functions (beginning with base, no underscore at the end) to manipulate knowledge bases.
 
-recordBaseSet_ : KnowledgeRecord euser userrecord comparable v -> KnowledgeRecord euser userrecord comparable v
+recordBaseSet_ : ResourceRecord euser userrecord comparable v -> ResourceRecord euser userrecord comparable v
 recordBaseSet_ krecord =
   Dict.foldl
     (\key fread krecord' -> recordWrite_ (key, fread krecord'.record) krecord')
@@ -949,11 +962,11 @@ recordRWCrashMessage_ : comparable -> String
 recordRWCrashMessage_ key =
   "For key " ++ (toString key) ++ " "
   ++ "there is not a complete read/write pair, which violates the constraints of the "
-  ++ "system! ONLY USE THE PROVIDED PRIMITIVES TO MANIPULATE KnowledgeRecords, it is an "
+  ++ "symachine! ONLY USE THE PROVIDED PRIMITIVES TO MANIPULATE ResourceRecords, it is an "
   ++ "opaque type."
 
 
-recordRW_ : comparable -> KnowledgeRecord euser userrecord comparable v -> Maybe { write : Knowledge euser v -> userrecord -> userrecord, read : userrecord -> Knowledge euser v }
+recordRW_ : comparable -> ResourceRecord euser userrecord comparable v -> Maybe { write : Resource euser v -> userrecord -> userrecord, read : userrecord -> Resource euser v }
 recordRW_ key krecord =
   let
     arrangement write' read' =
@@ -966,14 +979,14 @@ recordRW_ key krecord =
       case (maybeWrite, maybeRead) of
         (Just write', Just read') -> Just { read = read', write = write' }
         (Nothing, Nothing) ->
-          Debug.log "For KnowledgeRecord key" key
+          Debug.log "For ResourceRecord key" key
           |> \_ -> Debug.log "Expecting to find read and write functions but found" Nothing
 
         (Just _, Nothing) -> Debug.crash (recordRWCrashMessage_ key)
         (Nothing, Just _) -> Debug.crash (recordRWCrashMessage_ key)
 
 
-recordWrite_ : KnowledgeBaseDelta euser comparable v -> KnowledgeRecord euser userrecord comparable v -> KnowledgeRecord euser userrecord comparable v
+recordWrite_ : ResourceBaseDelta euser comparable v -> ResourceRecord euser userrecord comparable v -> ResourceRecord euser userrecord comparable v
 recordWrite_ (key, kb') krecord =
   recordRW_ key krecord
   |> Maybe.map (\{write} ->
@@ -984,14 +997,14 @@ recordWrite_ (key, kb') krecord =
   |> Maybe.withDefault krecord
 
 
-recordRead_ : comparable -> KnowledgeRecord euser userrecord comparable v -> Knowledge euser v
+recordRead_ : comparable -> ResourceRecord euser userrecord comparable v -> Resource euser v
 recordRead_ key krecord =
   recordRW_ key krecord
   |> Maybe.map (\{read} -> read krecord.record)
   |> Maybe.withDefault Unknown
 
 
-baseAt_ : comparable -> BaseImpl euser comparable v -> Knowledge euser v
+baseAt_ : comparable -> BaseImpl euser comparable v -> Resource euser v
 baseAt_ key kbdict =
   Dict.get key kbdict
   |> Maybe.withDefault Unknown
@@ -1004,7 +1017,7 @@ baseMember_ key kbdict =
     _ -> True
 
 
-maybeRemoteTask_ : Knowledge euser v -> Maybe (Remote euser v)
+maybeRemoteTask_ : Resource euser v -> Maybe (Remote euser v)
 maybeRemoteTask_ kb =
   case kb of
     Operation remote -> Just remote
@@ -1014,7 +1027,7 @@ maybeRemoteTask_ kb =
 declareRemoteResultDispatch_ : RemoteConfig euser v -> Remote euser v -> QueryTask never
 declareRemoteResultDispatch_ config remote =
   catchError config.errorHandler remote
-    `andThen` (Signal.send config.address) -- got a new Knowledge as a result of the Operation
+    `andThen` (Signal.send config.address) -- got a new Resource as a result of the Operation
     `onError` (Undecided >> Signal.send config.address) -- last ditch if the error handler erred.
 
 
@@ -1049,8 +1062,8 @@ baseDeltaDictIntegrate_ deltas kbdict0 =
 
 
 -- `baseTransformAt` can be combined by currying easily with any of the above knowledge translations
--- ending in (Knowledge euser v -> Knowledge euser v)
-baseDeltaTransformAt_ : (Knowledge euser v -> Knowledge euser v) -> comparable -> BaseImpl euser comparable v -> BaseDeltaImpl euser comparable v
+-- ending in (Resource euser v -> Resource euser v)
+baseDeltaTransformAt_ : (Resource euser v -> Resource euser v) -> comparable -> BaseImpl euser comparable v -> BaseDeltaImpl euser comparable v
 baseDeltaTransformAt_ transform key kbdict =
   Dict.get key kbdict
   |> Maybe.map transform
@@ -1082,7 +1095,7 @@ baseDeltaDictQuery_ configMap deltas =
 
 
 
-baseRemoteConfig_ : Signal.Address (BaseDeltaImpl euser comparable v) -> (Error.Error euser -> Knowledge euser v) -> RemoteMapConfig euser comparable v
+baseRemoteConfig_ : Signal.Address (BaseDeltaImpl euser comparable v) -> (Error.Error euser -> Resource euser v) -> RemoteMapConfig euser comparable v
 baseRemoteConfig_ address errorHandler =
   { addressOf = (\key -> Signal.forwardTo address (\kb' -> (key, kb')))
   , errorHandlerOf = always errorHandler

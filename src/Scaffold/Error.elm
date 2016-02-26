@@ -28,7 +28,7 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 --}
 
 
-module Gigan.Error
+module Scaffold.Error
 
   (DecodingFailure, ErrorType (UnknownError, DecoderError, UserError), Error,
 
@@ -53,7 +53,7 @@ constructing errors.
 -}
 
 
-import Gigan.Core exposing (..)
+import Scaffold.App exposing (..)
 
 
 {-| Represents a decoding task which failed. -}
@@ -63,7 +63,7 @@ type alias DecodingFailure =
   }
 
 
-{-| Type of error that occurred in Gigan. -}
+{-| Type of error that occurred in Scaffold. -}
 type ErrorType euser =
   UnknownError
   | DecoderError DecodingFailure

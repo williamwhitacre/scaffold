@@ -28,7 +28,7 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 --}
 
 
-module Gigan.Layout
+module Scaffold.Layout
 
   (Axis, Bounds, Group, Item, Rule,
 
@@ -55,7 +55,7 @@ module Gigan.Layout
 
   where
 
-{-| A very nice ruler snapping system for layouts. Actual documentation underway.
+{-| A very nice ruler snapping symachine for layouts. Actual documentation underway.
 
 # Definitions
 @docs Axis, Bounds, Group, Item, Rule

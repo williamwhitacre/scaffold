@@ -12,9 +12,9 @@ This scaffolding is intended to provide a set of very useful types and DSL libra
 
 ### Scaffold.App
 
-Contains basic definitions for Progam, ProgramInput, and ProgramOutput. Defines the concepts of TaskDispatchments and ProgramTaps for routing dataflow at the top level of your program. Defines the needed functions to run programs, route input sequence signals, and route the resulting action lists from output TaskDispatchment signals to destination addresses, the self (this running Program), or error handlers.
+Contains basic definitions for Progam, ProgramInput, and ProgramOutput. Defines the concepts of TaskDispatchments and ProgramConnectors for routing dataflow at the top level of your program. Defines the needed functions to run programs, route input sequence signals, and route the resulting action lists from output TaskDispatchment signals to destination addresses, the self (this running Program), or error handlers.
 
-_(In Gigan, this was formerly called Core.)_
+_(In Gigan, this was formerly called Gigan.Core.)_
 
 ### Scaffold.Machine
 
@@ -22,7 +22,7 @@ Contains basic definition of the Machine. A Machine is just a snapshot of a Prog
 
 This is a good way to build modular programs, and works by adjusting all instances of tasks and actions to _lists of tasks and actions instead_. This gives us the power to provide utilities dispatching, ordering, and executing arbitrary sequences of actions with an easy way to select whether or not atomic execution of a given sequence of actions is required. What that does is it provides us with a way compose actions out of sequences of simpler actions, yielding simpler business logic inside components and a rich world of idioms to explore for the bolder among us, but it still feels and scales the same way as a StartApp application because it's fundamentally still just the Elm Architecture.
 
-_(In Gigan, this was formerly called Stem.)_
+_(In Gigan, this was formerly called Gigan.Stem.)_
 
 ### Scaffold.Resource
 
@@ -44,7 +44,7 @@ Resources can be resolved compositionally:
       dispatchIf isUnknown fetchMyContent
       >> dispatchInCase tryAlternative
       >> decideBy myErrorPromote
-    
+
 
 Resource types can be transformed:
 
@@ -52,7 +52,7 @@ Resource types can be transformed:
       deltaContentResource' myContentResource
       |> therefore (machine (defProgram' ...))
 
-_(In Gigan, this was formerly called Knowledge.)_
+_(In Gigan, this was formerly called Gigan.Knowledge.)_
 
 
 # Can I see how to use it?
