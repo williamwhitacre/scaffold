@@ -77,7 +77,9 @@ module Scaffold.Resource
   recordContent, recordDo, recordUpdate, recordQuery, recordIntegrate,
 
   remoteConfig,
-  remoteErrorConfig)
+  remoteErrorConfig,
+
+  toProgram)
 
   where
 
@@ -134,6 +136,9 @@ can be composed as deeply as desired. The documentation is underway.
 
 # Configuration
 @docs remoteConfig, remoteErrorConfig
+
+# Controls
+@docs toProgram
 
 -}
 
