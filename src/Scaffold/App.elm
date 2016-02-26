@@ -35,7 +35,7 @@ module Scaffold.App
 
   defProgram, defProgram',
 
-  run, runWithWork, withInputs, withLazySequenceInputs, defLazySequenceInputs, withSequenceInputs,
+  run, runAnd, runWithWork, withInputs, withLazySequenceInputs, defLazySequenceInputs, withSequenceInputs,
   defSequenceInputs, sink,
 
   updated, presented, withTasks, withDispatchment, withChildren, viewOutputTask,
@@ -87,7 +87,7 @@ module Scaffold.App
 @docs defProgram, defProgram'
 
 # Run Program Programs
-@docs run, runWithWork, withInputs, defLazySequenceInputs, defSequenceInputs, withLazySequenceInputs, withSequenceInputs, sink
+@docs run, runAnd, runWithWork, withInputs, defLazySequenceInputs, defSequenceInputs, withLazySequenceInputs, withSequenceInputs, sink
 
 # UpdatedModel and ViewOutput Manipulation
 @docs updated, presented, withTasks, withDispatchment, withChildren, viewOutputTask
@@ -700,6 +700,8 @@ run defs =
   runAnd nilTask defs
 
 
+{-| Run an program with a startup task
+-}
 runAnd : ProgramTask bad a -> ProgramInput a b c bad -> ProgramOutput a b c bad
 runAnd = flip runWithWork
 
