@@ -36,7 +36,7 @@ module Scaffold.App
   defProgram, defProgram',
 
   run, runWithWork, withInputs, withLazySequenceInputs, defLazySequenceInputs, withSequenceInputs,
-  defSequenceInputs, appOutputPort,
+  defSequenceInputs, sink,
 
   updated, presented, withTasks, withDispatchment, withChildren, viewOutputTask,
 
@@ -77,7 +77,7 @@ module Scaffold.App
 
 
     port sink : Signal (Task z ())
-    port sink = appOutputPort myProgramOutput
+    port sink = sink myProgramOutput
 
 
 # Definitions
@@ -87,7 +87,7 @@ module Scaffold.App
 @docs defProgram, defProgram'
 
 # Run Program Programs
-@docs run, runWithWork, withInputs, defLazySequenceInputs, defSequenceInputs, withLazySequenceInputs, withSequenceInputs, appOutputPort,
+@docs run, runWithWork, withInputs, defLazySequenceInputs, defSequenceInputs, withLazySequenceInputs, withSequenceInputs, sink
 
 # UpdatedModel and ViewOutput Manipulation
 @docs updated, presented, withTasks, withDispatchment, withChildren, viewOutputTask
@@ -384,7 +384,7 @@ defProgram' present stage update model =
 
 {-| Forward applicative alternative to withSequenceInputs. -}
 defSequenceInputs : List (Signal (List a)) -> ProgramInput a b c bad -> ProgramInput a b c bad
-defSequenceInputs = flip withInputs
+defSequenceInputs = flip withSequenceInputs
 
 
 {-| Forward applicative alternative to withLazySequenceInputs. -}
@@ -660,10 +660,10 @@ reduceDispatchment_ dispatchmentRecord =
 
 -- TEARS OF :JOY:
 
-{-| The appOutputPort is the final stop for ProgramOutput. This should be attached at a port to get your
+{-| The sink is the final stop for ProgramOutput. This should be attached at a port to get your
 tasks running. -}
-appOutputPort : ProgramOutput a b c bad -> Signal (Task z ())
-appOutputPort q'' =
+sink : ProgramOutput a b c bad -> Signal (Task z ())
+sink q'' =
   q''.tasks ~> \task' -> {-Debug.log "TASK RCV"-} task'
     `andThen` (\final -> {-Debug.log "TASK OK"-} final |> \_ -> Task.succeed ())
     `onError` (\err -> {-Debug.log "ERROR"-} err |> \_ -> Task.succeed ())
@@ -697,7 +697,11 @@ presented view =
 -}
 run : ProgramInput a b c bad -> ProgramOutput a b c bad
 run defs =
-  defs `runWithWork` nilTask
+  runAnd nilTask defs
+
+
+runAnd : ProgramTask bad a -> ProgramInput a b c bad -> ProgramOutput a b c bad
+runAnd = flip runWithWork
 
 
 {-| Constructor for an ProgramSnapshot. I reccomend using the Machine module instead of these functions. -}

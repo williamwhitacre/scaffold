@@ -15,16 +15,16 @@ This scaffolding is intended to provide a set of very useful types and DSL libra
 Contains basic definitions for Progam, ProgramInput, and ProgramOutput. Defines the concepts of TaskDispatchments and ProgramConnectors for routing dataflow at the top level of your program. Defines the needed functions to run programs, route input sequence signals, and route the resulting action lists from output TaskDispatchment signals to destination addresses, the self (this running Program), or error handlers.
 
 
-    myProgramOutput : ProgramOutput MyAction MyModel My Error
+    myProgramOutput : ProgramOutput MyAction MyModel MyViewType Error
     myProgramOutput =
-      defProgram' present stage update model0
-      |> defSequenceInputs
+      App.defProgram' present stage update model0
+      |> App.defSequenceInputs
           [ someVeryImportantBrowserEnvironmentInput
           , someOtherOutsideSignal
           ]
-      |> run
-      |> (it'sErrorConnector myErrorHandler)
-      |> itself
+      |> App.run
+      |> App.it'sErrorConnector myErrorHandler
+      |> App.itself
 
 
     main : Signal Html.Html
@@ -32,7 +32,7 @@ Contains basic definitions for Progam, ProgramInput, and ProgramOutput. Defines 
 
 
     port sink : Signal (Task z ())
-    port sink = appOutputPort myProgramOutput
+    port sink = App.sink myProgramOutput
 
 
 _(In Gigan, this was formerly called Gigan.Core.)_
@@ -74,12 +74,6 @@ Resources can be resolved compositionally:
       >> dispatchInCase tryAlternative
       >> decideBy myErrorPromote
 
-
-Resource types can be transformed:
-
-    myControllerResource =
-      deltaContentResource' myContentResource
-      |> therefore (machine (defProgram' ...))
 
 _(In Gigan, this was formerly called Gigan.Knowledge.)_
 

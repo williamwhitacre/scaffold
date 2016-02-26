@@ -10,7 +10,7 @@ mirrors the structure of StartApp in this way.
 
 -}
 
-import Scaffold.App exposing (..)
+import Scaffold.App as App
 
 -- We are using HTML here to avoid introducing too many unfamiliar things at once.
 import Html exposing (Html, div, span, button, text)
@@ -46,16 +46,16 @@ type alias Model =
 -- This function produces a TaskDispatchment from the current model which either has no tasks to
 -- run in the case that the auto mode is not enabled, otherwise it produces an ProgramTask using
 -- the blindProgramAgent, which invokes the AutoDo action after sleeping for one second.
-autoIncrement : Model -> TaskDispatchment () Action
+autoIncrement : Model -> App.TaskDispatchment () Action
 autoIncrement model =
   if not model.stop && model.auto /= 0 then
     -- we are in auto mode with no user request to stop dispatch one task that always executes
     -- AutoDo exactly one second in to the future.
-    dispatchTasks [programBlindAgent (programAgentSuccess [AutoDo]) (Task.sleep 1000)]
+    App.dispatchTasks [App.programBlindAgent (App.programAgentSuccess [AutoDo]) (Task.sleep 1000)]
   else
     -- do nothing because we are in auto mode. NOTE: an empty task dispatchment will not result in
     -- the execution of any tasks, not even a do-nothing task.
-    dispatchTasks []
+    App.dispatchTasks []
 
 
 -- We are using Html for the output given that the Layout module relies on the now depreciated
@@ -93,7 +93,7 @@ stopOr model say =
 
 
 -- Present the model.
-present : Signal.Address (List Action) -> Time -> Model -> ViewOutput Action Html ()
+present : Signal.Address (List Action) -> Time -> Model -> App.ViewOutput Action Html ()
 present address now model =
   div
     [ styleOut ]
@@ -115,44 +115,42 @@ present address now model =
         ]
     ]
 
-  |> presented
+  |> App.presented
 
 
 -- Update the model. Nothing unfamiliar here.
-update : Action -> Time -> Model -> UpdatedModel Action Model ()
+update : Action -> Time -> Model -> App.UpdatedModel Action Model ()
 update action now model =
   case action of
     CurrentWidth width ->
       { model | width = width }
-      |> updated
+      |> App.updated
 
     Change amount ->
       { model | value = model.value + amount }
-      |> updated
+      |> App.updated
 
     AutoOn amount ->
       { model | stop = False, auto = amount }
-      |> \model' -> updated model'
-      |> withDispatchment (autoIncrement model')
+      |> \model' -> App.updated model'
+      |> App.withDispatchment (autoIncrement model')
 
     AutoDo ->
       update (Change model.auto) now model
-      |> withDispatchment (autoIncrement model)
+      |> App.withDispatchment (autoIncrement model)
 
     AutoOff ->
       { model | stop = True, auto = 0 }
-      |> updated
+      |> App.updated
 
 
 -- Set up the program.
-output : ProgramOutput Action Model Html ()
+output : App.ProgramOutput Action Model Html ()
 output =
-  (defProgram present update model0)
-    `withSequenceInputs`
-      [ Signal.map (CurrentWidth >> flip (::) []) Window.width ]
-    `runWithWork`
-      nilTask
-    +--> itself
+  App.defProgram present update model0
+  |> App.defSequenceInputs [ Signal.map (CurrentWidth >> flip (::) []) Window.width ]
+  |> App.run     -- ProgramInput -> ProgramOutput
+  |> App.itself  -- Wire task output back in.
 
 
 -- Output root view.
@@ -160,6 +158,6 @@ main : Signal Html.Html
 main = output.view'
 
 
--- Use appOutputPort to run the concrete task output of the program.
+-- Use sink to run the concrete task output of the program.
 port sink : Signal (Task z ())
-port sink = appOutputPort output
+port sink = App.sink output
