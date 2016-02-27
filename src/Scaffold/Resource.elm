@@ -45,7 +45,7 @@ module Scaffold.Resource
   QueryTask,
 
   defResource, forbiddenResource, pendingResource, undecidedResource,
-  unknownResource, voidResource, remoteResource,
+  unknownResource, voidResource, resourceDo,
 
   maybeOr, resultOr,
 
@@ -67,7 +67,7 @@ module Scaffold.Resource
   isKnown, isNotKnown,
   isOperation, isNotOperation,
 
-  knowledgeIntegrate, knowledgeQuery, knowledgeUpdate,
+  resourceIntegrate, resourceQuery, resourceUpdate,
 
   baseDeltaMap, baseDeltaTherefore,
 
@@ -89,7 +89,7 @@ and explicit fetching and writing.
 A Resource is datum whose state is concretely fuzzy because it must be retrieved from
 or synchronized with one or more remote services. The bulk of these functions are intended to be used together as a DSL
 that provides very concise reductions and conditionally executed contingencies for bad data, as well as very
-succinct mapping from fuzzy knowledge states on to concrete views.
+succinct mapping from fuzzy resource states on to concrete views.
 
 It is also possble to compose transformations and mapping
 on to pending remote operation results, so that longer running asynchronous transformations (including fetching and manipulation)
@@ -105,7 +105,7 @@ can be composed as deeply as desired. The documentation is underway.
 @docs Remote, RemoteMap, RemoteConfig, RemoteMapConfig, QueryTask
 
 # Resource constructors
-@docs defResource, forbiddenResource, pendingResource, undecidedResource, unknownResource, voidResource, remoteResource
+@docs defResource, forbiddenResource, pendingResource, undecidedResource, unknownResource, voidResource, resourceDo
 
 # Resource from Existing non-determinant Types
 @docs maybeOr, resultOr
@@ -123,7 +123,7 @@ can be composed as deeply as desired. The documentation is underway.
 @docs isUnknown, isNotUnknown, isPending, isNotPending, isUndecided, isNotUndecided, isForbidden, isNotForbidden, isVoid, isNotVoid, isNil, isNotNil, isKnown, isNotKnown, isOperation, isNotOperation
 
 # Integrate Resource
-@docs knowledgeIntegrate, knowledgeQuery, knowledgeUpdate
+@docs resourceIntegrate, resourceQuery, resourceUpdate
 
 # Transforming Resource Base Deltas
 @docs baseDeltaMap, baseDeltaTherefore
@@ -166,7 +166,7 @@ type alias BaseDeltaImpl euser comparable v = (comparable, Resource euser v)
 to the configured address for the Resource, ResourceBase, or ResourceRecord. -}
 type alias QueryTask never = Task never ()
 
-{-| A knowledge item. -}
+{-| A resource item. -}
 type Resource euser v =
   Unknown
   | Pending
@@ -177,14 +177,14 @@ type Resource euser v =
   -- tells us in a semantically pure and direct way to tell the user that the data they were looking for
   -- is Void.
   | Void
-  -- Gives reason as to why this data are still unknown after a retrieval attempt. If a knowledge
+  -- Gives reason as to why this data are still unknown after a retrieval attempt. If a resource
   -- enters in to this state, it's time to intervene, whether automatically or with the aid of user
   -- feedback of some kind.
   | Undecided (Error.Error euser)
   -- This is what is done if the result from the remote operation for the data is an error explaining why
   -- access to the data was denied.
   | Forbidden (Error.Error euser)
-  -- If a knowledge is an Operation, then any primitives not suffixed with Now
+  -- If a resource is an Operation, then any primitives not suffixed with Now
   | Operation (Remote euser v)
   -- known value of type v.
   | Known v
@@ -212,7 +212,7 @@ type alias ResourceBaseDelta euser comparable v =
   BaseDeltaImpl euser comparable v
 
 
-{-| A knowledge base has a dictionary of Resource. Use this to represent arbitrary collections of
+{-| A resource base has a dictionary of Resource. Use this to represent arbitrary collections of
 remote data with a uniform schema. You can support schemaless data with JSON, but that should really
 only be done if you absolutely must, since it adds quite a bit of encoder/decoder overhead. -}
 type alias ResourceBase euser comparable v =
@@ -223,7 +223,7 @@ type alias ResourceBase euser comparable v =
   }
 
 
-{-| This is a wrapper for knowledge bases that are finite in size, and have a collection of
+{-| This is a wrapper for resource bases that are finite in size, and have a collection of
 differently typed fields. It is best for records which may only be partially known. A concrete
 example of this would be a user's personal information, where everything they have hidden should
 come back as `forbiddenResource`. -}
@@ -235,7 +235,7 @@ type alias ResourceRecord euser userrecord comparable v =
   }
 
 
-{-| A knowledge record stub represents how to manage a knowledge record, with the record itself
+{-| A resource record stub represents how to manage a resource record, with the record itself
 omitted. This type is outputted by the `record` function. Setting this for the first time using
 `recordSet` will result in a proper ResourceRecord.  -}
 type alias ResourceRecordStub euser userrecord comparable v =
@@ -251,14 +251,14 @@ type alias ResourceRecordStub euser userrecord comparable v =
 {-| Resource of a ResourceBase. This adds basic support for nesting ResourceBase and ResourceBase
 operations using `within`, which approximates the active record pattern as well as I can in Elm so
 far. -}
-type alias BaseResource euser comparable v =
-  Resource (ResourceBase euser comparable v)
+type alias BaseResource euser' euser comparable v =
+  Resource euser' (ResourceBase euser comparable v)
 
 {-| Resource of a ResourceRecord. This adds support for nesting ResourceRecord and ResourceRecord
 operations using `within`, which approximates the active record pattern as well as I can in Elm so
 far. -}
-type alias RecordResource euser userrecord comparable v =
-  Resource (ResourceRecord euser userrecord comparable v)
+type alias RecordResource euser' euser userrecord comparable v =
+  Resource euser' (ResourceRecord euser userrecord comparable v)
 
 
 
@@ -273,7 +273,7 @@ remoteConfig address =
 
 {-| Adds an optional special error handler for resolving totally unexpected errors. A final error
 handler should be provided such that any errors not trapped by a decideBy application still
-gracefully recover. By default, a valid knowledge is produced from any error by promoting that
+gracefully recover. By default, a valid resource is produced from any error by promoting that
 Error to Undecided. -}
 remoteErrorConfig : (Error.Error euser -> Resource euser v) -> RemoteConfig euser v -> RemoteConfig euser v
 remoteErrorConfig handler config =
@@ -282,7 +282,7 @@ remoteErrorConfig handler config =
   }
 
 
-{-| True if the knowledge is unknownResource. -}
+{-| True if the resource is unknownResource. -}
 isUnknown : Resource euser v -> Bool
 isUnknown kb =
   case kb of
@@ -290,24 +290,24 @@ isUnknown kb =
     _ -> False
 
 
-{-| False if the knowledge is unknownResource. -}
+{-| False if the resource is unknownResource. -}
 isNotUnknown : Resource euser v -> Bool
 isNotUnknown = isUnknown >> not
 
 
-{-| True if the knowledge is pendingResource. -}
+{-| True if the resource is pendingResource. -}
 isPending : Resource euser v -> Bool
 isPending kb =
   case kb of
     Pending -> True
     _ -> False
 
-{-| False if the knowledge is pendingResource. -}
+{-| False if the resource is pendingResource. -}
 isNotPending : Resource euser v -> Bool
 isNotPending = isPending >> not
 
 
-{-| True if the knowledge is voidResource. -}
+{-| True if the resource is voidResource. -}
 isVoid : Resource euser v -> Bool
 isVoid kb =
   case kb of
@@ -315,12 +315,12 @@ isVoid kb =
     _ -> False
 
 
-{-| False if the knowledge is voidResource. -}
+{-| False if the resource is voidResource. -}
 isNotVoid : Resource euser v -> Bool
 isNotVoid = isVoid >> not
 
 
-{-| True if the knowledge is unknownResource or voidResource. -}
+{-| True if the resource is unknownResource or voidResource. -}
 isNil : Resource euser v -> Bool
 isNil kb =
   case kb of
@@ -329,12 +329,12 @@ isNil kb =
     _ -> False
 
 
-{-| False if the knowledge is unknownResource or voidResource. -}
+{-| False if the resource is unknownResource or voidResource. -}
 isNotNil : Resource euser v -> Bool
 isNotNil = isNil >> not
 
 
-{-| True if the knowledge is undecidedResource. -}
+{-| True if the resource is undecidedResource. -}
 isUndecided : Resource euser v -> Bool
 isUndecided kb =
   case kb of
@@ -342,12 +342,12 @@ isUndecided kb =
     _ -> False
 
 
-{-| False if the knowledge is undecidedResource. -}
+{-| False if the resource is undecidedResource. -}
 isNotUndecided : Resource euser v -> Bool
 isNotUndecided = isUndecided >> not
 
 
-{-| True if the knowledge is forbiddenResource. -}
+{-| True if the resource is forbiddenResource. -}
 isForbidden : Resource euser v -> Bool
 isForbidden kb =
   case kb of
@@ -355,12 +355,12 @@ isForbidden kb =
     _ -> False
 
 
-{-| False if the knowledge is forbiddenResource. -}
+{-| False if the resource is forbiddenResource. -}
 isNotForbidden : Resource euser v -> Bool
 isNotForbidden = isForbidden >> not
 
 
-{-| True if the knowledge is a pending operation. -}
+{-| True if the resource is a pending operation. -}
 isOperation : Resource euser v -> Bool
 isOperation kb =
   case kb of
@@ -368,12 +368,12 @@ isOperation kb =
     _ -> False
 
 
-{-| False if the knowledge is a pending operation. -}
+{-| False if the resource is a pending operation. -}
 isNotOperation : Resource euser v -> Bool
 isNotOperation = isOperation >> not
 
 
-{-| True if the knowledge is known. -}
+{-| True if the resource is known. -}
 isKnown : Resource euser v -> Bool
 isKnown kb =
   case kb of
@@ -381,7 +381,7 @@ isKnown kb =
     _ -> False
 
 
-{-| False if the knowledge is known. -}
+{-| False if the resource is known. -}
 isNotKnown : Resource euser v -> Bool
 isNotKnown = isKnown >> not
 
@@ -396,11 +396,11 @@ catchError decider remote =
   remote `onError` (decider >> Task.succeed)
 
 
-{-| transform the value itself, if known, producing a knowledge of some new value type value'.
-therefores are composed on to the results of remote operations if they represent known knowledge or
-further operations to attempt. This allows us to compose async processing stages before knowledge
+{-| transform the value itself, if known, producing a resource of some new value type value'.
+therefores are composed on to the results of remote operations if they represent known resource or
+further operations to attempt. This allows us to compose async processing stages before resource
 is finally reduced to a displayed or usable result as deeply and interchangably as we want to,
-provided that we always use "therefore" _first_ to lift the knowledge type out before listing
+provided that we always use "therefore" _first_ to lift the resource type out before listing
 a sequence of simple or contingent reductions. -}
 therefore : (v -> v') -> Resource euser v -> Resource euser v'
 therefore xdcr kb =
@@ -416,12 +416,12 @@ therefore xdcr kb =
     Operation remote -> Operation (comprehend xdcr remote)
 
 
-{-| This is for nesting operations on knowledge bases. For example:
+{-| This is for nesting operations on resource bases. For example:
 
     -- this'll write something at the patch foo.bar if "bar" is void.
     baseDo (within <| baseDo (inquireIf isVoid myBarWriter) "bar") "foo" myBase
 
-This code will work on a knowledge base of base knowledges, so that's a nested record. The active
+This code will work on a resource base of base knowledges, so that's a nested record. The active
 record pattern can be approximated like this, and I've found it extremely handy.
 
 -}
@@ -434,14 +434,36 @@ within operation ksub =
     _ -> ksub
 
 
+--baseDo (within <| baseDo (inquireIf isVoid myBarWriter) "bar") "foo" myBase
+
+{-| Shorthand for nesting resource bases. -}
+withinBaseDo
+  :  (Resource euser sub -> Resource euser sub)
+  -> comparable
+  -> BaseResource euser' euser comparable v
+  -> BaseResource euser' euser comparable v
+withinBaseDo transform key =
+  within (baseDo transform key)
+
+
+{-| Shorthand for nesting resource records. -}
+withinRecordDo
+  :  (Resource euser sub -> Resource euser sub)
+  -> comparable
+  -> RecordResource euser' euser userrecord comparable v
+  -> RecordResource euser' euser userrecord comparable v
+withinRecordDo transform key =
+  within (recordDo transform key)
+
+
 -- NOTE : When one applies one of the below primitives to the an instance of Resource, the
 -- following principal is obeyed: Any primitive which makes sense on an Undecided, Void, or Known
--- Resource instance _also applies to future knowledge implied by the existence of an Operation,_
+-- Resource instance _also applies to future resource implied by the existence of an Operation,_
 -- such that Remotes can be very cleanly chained in causal order with repeated forward
 -- applications of `dispatchIf` and `dispatchInCase`, and reduced with a declared plan just as cleanly
 -- at any future stage using `therefore`, `decideBy`, and `assumeIf`. One can freely alternate
 -- between Inquiries and causal reductions, whose most important primitives are given in respective
--- lists above, and then pipe the future state of the knowledge back in to any part of the program
+-- lists above, and then pipe the future state of the resource back in to any part of the program
 -- using the configuration built using `knowledgeSink`, and optionally `resolvingAllBy`.
 -- `knowledgeSink` takes an address of type `Signal.Address (Resource euser v)` and produces an
 -- `RemoteConfig euser v`. We can additionally specify an error handler using `resolvingAllBy` that will
@@ -449,9 +471,9 @@ within operation ksub =
 -- specified is to promote the offending Error to an Undecided.
 
 
-{-| Offer a decision on some `undecidedResource kb`. Undecided knowledge is the result of some
-problem which may or may not be in control of the client. Such knowledge may be the result of
-anything that can result in an error in your application. If this knowledge is an operation, then
+{-| Offer a decision on some `undecidedResource kb`. Undecided resource is the result of some
+problem which may or may not be in control of the client. Such resource may be the result of
+anything that can result in an error in your application. If this resource is an operation, then
 the assumption will be applied to the result of that operation.
 -}
 decideBy : (Error.Error euser -> Resource euser v) -> Resource euser v -> Resource euser v
@@ -463,8 +485,8 @@ decideBy decider kb =
     _ -> kb
 
 
-{-| If some predicate `satisfies` is satisfied by the knowledge `kb`, then we make the following
-assumption. If this knowledge is an operation, then the assumption will be applied to
+{-| If some predicate `satisfies` is satisfied by the resource `kb`, then we make the following
+assumption. If this resource is an operation, then the assumption will be applied to
 the result of that operation. -}
 assumeIf : (Resource euser v -> Bool) -> v -> Resource euser v -> Resource euser v
 assumeIf satisfies assume kb =
@@ -483,8 +505,8 @@ assumeIfNot satisfies assume kb =
 
 
 {-| If `possibleAssumption` yields some value `value'` when a Resource is applied, then
-that value is used to overwrite the knowledge with an assumption `Known value'`, otherwise the
-Resource is unaffected. If this knowledge is an operation, then the assumption will be applied
+that value is used to overwrite the resource with an assumption `Known value'`, otherwise the
+Resource is unaffected. If this resource is an operation, then the assumption will be applied
 conditionally to the result of that operation. -}
 assumeInCase : (Resource euser v -> Maybe v) -> Resource euser v -> Resource euser v
 assumeInCase possibleAssumption kb =
@@ -497,7 +519,7 @@ assumeInCase possibleAssumption kb =
       |> Maybe.withDefault kb
 
 
-{-| If some predicate `satisfies` is satisfied by the knowledge `kb`, then we make the following
+{-| If some predicate `satisfies` is satisfied by the resource `kb`, then we make the following
 remote operation. -}
 dispatchIf : (Resource euser v -> Bool) -> Remote euser v -> Resource euser v -> Resource euser v
 dispatchIf satisfies remote kb =
@@ -516,8 +538,8 @@ dispatchIfNot satisfies remote kb =
 
 
 {-| If `possibleOperation` yields some Remote task `remote` when a Resource is applied, then
-the knowledge is replaced by the knowledge `doOperation remote`, otherwise the knowledge is
-unaffected. If this knowledge is an operation, then the result of that operation will be used as
+the resource is replaced by the resource `doOperation remote`, otherwise the resource is
+unaffected. If this resource is an operation, then the result of that operation will be used as
 the input to the provided function. In this way, operations can be chained arbitrarily deep,
 but in a manner that helpfully abstracts away whether we are still waiting or already have the
 result in the composition. -}
@@ -536,14 +558,14 @@ dispatchInCase possibleOperation kb =
 -- convenient conversion to a maybe after all mappings are given. This is intended for use when
 -- mapping the state of the content to an actual display.
 
-{-| If a knowledge is known, then give Just it's value, otherwise Nothing. -}
+{-| If a resource is known, then give Just it's value, otherwise Nothing. -}
 maybeKnownNow : Resource euser v' -> Maybe v'
 maybeKnownNow kb' =
   case kb' of
     Known x' -> Just x'
     _ -> Nothing
 
-{-| If the predicate is satisfied, replace the knowledge with some known value. -}
+{-| If the predicate is satisfied, replace the resource with some known value. -}
 assumeIfNow : (Resource euser v' -> Bool) -> v' -> Resource euser v' -> Resource euser v'
 assumeIfNow satisfies assumption kb' =
   if satisfies kb' then Known assumption else kb'
@@ -590,15 +612,15 @@ otherwise = reduceNotKnownNowTo
 
 
 {-| Somthing that's totally unknown. This is the default result of retrieving an element that has
-no representation in a knowledge base, but also has obvious other uses as a placeholder that is
+no representation in a resource base, but also has obvious other uses as a placeholder that is
 typely more powerful than Result or Maybe for production data management. -}
 unknownResource : Resource euser v
 unknownResource = Unknown
 
 
-{-| Something on which knowledge is still pending. The most conforming way to use this is to not
+{-| Something on which resource is still pending. The most conforming way to use this is to not
 use it directly. Calling *Integrate should be done after every update sequence during staging, which
-results in all operations in a knowledge base being replaced with pendingResource. If you stick to
+results in all operations in a resource base being replaced with pendingResource. If you stick to
 this, the presence of pendingResource is a guarantee you'll be getting a delta back about it
 assuming your wiring's not broken. -}
 pendingResource : Resource euser v
@@ -606,35 +628,35 @@ pendingResource = Pending
 
 
 {-| Something that is _known not to exist_. This is not the same as unknownResource or
-undecidedResource. Void knowledge should arise from a remote operation which verified that there
+undecidedResource. Void resource should arise from a remote operation which verified that there
 is definitely nothing there, so it is not an assumption. -}
 voidResource : Resource euser v
 voidResource = Void
 
 
-{-| The knowledge could not be obtained because something went wrong. This carries an error. To
+{-| The resource could not be obtained because something went wrong. This carries an error. To
 resolve `undecidedResource`, one should use assumptions and or operations to map it back in to
-sensible knowledge. -}
+sensible resource. -}
 undecidedResource : Error.Error euser -> Resource euser v
 undecidedResource = Undecided
 
 
-{-| The knowledge could not be obtained because the user of your program should not be allowed to
+{-| The resource could not be obtained because the user of your program should not be allowed to
 access it. This carries an error. To resolve `undecidedResource`, one should use assumptions and or
-operations to map it back in to sensible knowledge. -}
+operations to map it back in to sensible resource. -}
 forbiddenResource : Error.Error euser -> Resource euser v
 forbiddenResource = Forbidden
 
 
 {-| A known thing. Carries a value of type `v` for `Resource euser v`. `defResource` anything can be
 interpreted using `therefore` contingent upon it being a concrete `defResource` something. As described
-elsewhere, `therefore` has no effect on knowledge that satisfies `isNotKnown`. -}
+elsewhere, `therefore` has no effect on resource that satisfies `isNotKnown`. -}
 defResource : v -> Resource euser v
 defResource = Known
 
 
-{-| Map Result in to Resource. You'll need this if you want to roll your own knowledge base remotes,
-which is quite easy to do due to the pluggability of the knowledge module. The function specifies how
+{-| Map Result in to Resource. You'll need this if you want to roll your own resource base remotes,
+which is quite easy to do due to the pluggability of the resource module. The function specifies how
 to interpret errors. This is important in the case that you have to deal with permissions symachines.
 Some of your errors might be due to access denial, others might be due to unintentional errors. Use
 forbiddenResource and undecidedResource respectively for these cases. -}
@@ -662,36 +684,36 @@ maybeOr nothingResource maybeValue =
   |> Maybe.withDefault nothingResource
 
 
-{-| Define knowledge contingent on the future completion of some arbitrary operation. This is how
-we hook up knowledge bases to sources of content. -}
+{-| Define resource contingent on the future completion of some arbitrary operation. This is how
+we hook up resource bases to sources of content. -}
 doOperation : Remote euser v -> Resource euser v
 doOperation = Operation
 
 
-{-| Do something to a knowledge. There is an ignored comparable argument here. This merely exists so
-that the form of `remoteResource` is isomorphic to the form of `baseDo` and `recordDo`. -}
-remoteResource : (Resource euser v -> Resource euser v) -> comparable -> Resource euser v -> Resource euser v
-remoteResource transform _ kb =
+{-| Do something to a resource. There is an ignored comparable argument here. This merely exists so
+that the form of `resourceDo` is isomorphic to the form of `baseDo` and `recordDo`. -}
+resourceDo : (Resource euser v -> Resource euser v) -> comparable -> Resource euser v -> Resource euser v
+resourceDo transform _ kb =
   transform kb
 
 
-{-| Update knowledge with an incoming delta. Again, we ignore the comparable component of the
-knowledge base delta, but accept it to simplify the types. -}
-knowledgeUpdate : ResourceBaseDelta euser comparable v -> Resource euser v -> Resource euser v
-knowledgeUpdate (_, kb') kb = kb'
+{-| Update resource with an incoming delta. Again, we ignore the comparable component of the
+resource base delta, but accept it to simplify the types. -}
+resourceUpdate : ResourceBaseDelta euser comparable v -> Resource euser v -> Resource euser v
+resourceUpdate (_, kb') kb = kb'
 
 
-{-| Given some configuration and a knowledge, produce Just an opaque query task or Nothing
-when the knowledge is an operation or the knowledge is not an operation respectively. -}
-knowledgeQuery : RemoteConfig euser v -> Resource euser v -> Maybe (QueryTask never)
-knowledgeQuery config kb =
+{-| Given some configuration and a resource, produce Just an opaque query task or Nothing
+when the resource is an operation or the resource is not an operation respectively. -}
+resourceQuery : RemoteConfig euser v -> Resource euser v -> Maybe (QueryTask never)
+resourceQuery config kb =
   Maybe.map (declareRemoteResultDispatch_ config) (maybeRemoteTask_ kb)
 
 
-{-| Given some configuration and a knowledge, produce a pendingResource in the case that the
-knowledge is an operation, otherwise give the same knowledge. -}
-knowledgeIntegrate : RemoteConfig euser v -> Resource euser v -> Resource euser v
-knowledgeIntegrate config kb =
+{-| Given some configuration and a resource, produce a pendingResource in the case that the
+resource is an operation, otherwise give the same resource. -}
+resourceIntegrate : RemoteConfig euser v -> Resource euser v -> Resource euser v
+resourceIntegrate config kb =
   if isOperation kb then Pending else kb
 
 
@@ -704,7 +726,7 @@ knowledgeIntegrate config kb =
 -- respective tasks, which send their results to the ResourceBase's address. These tasks are
 -- always dispatched in parallel by folding the task list by spawn ... andThen.
 
-{-| Create a new knowledge base. This takes an address which accepts knowledge base deltas in sequence.
+{-| Create a new resource base. This takes an address which accepts resource base deltas in sequence.
 Currently, you are responsible for dropping irrelevant deltas. -}
 base : Signal.Address (ResourceBaseDelta euser comparable v) -> ResourceBase euser comparable v
 base address =
@@ -715,7 +737,7 @@ base address =
   }
 
 
-{-| Add an error handler to a knowledge base to replace the default error handler. The default error
+{-| Add an error handler to a resource base to replace the default error handler. The default error
 handler simply promotes errors to undecidedResource. You may way to give a definition in your own
 error handler that distinguishes between undecidedResource and forbiddenResource. No promotion to
 forbiddenResource is given by default because there is not sane default behavior that covers
@@ -727,7 +749,7 @@ baseErrorHandler errorHandler kbase =
   }
 
 
-{-| Get the knowledge at a given key from the knowledge base. -}
+{-| Get the resource at a given key from the resource base. -}
 baseAt : comparable -> ResourceBase euser comparable v -> Resource euser v
 baseAt key kbase =
   if baseMember_ key kbase.deltas then
@@ -736,12 +758,12 @@ baseAt key kbase =
     baseAt_ key kbase.base
 
 
-{-| Determine if there is some knowledge at a given key that is not unknown. -}
+{-| Determine if there is some resource at a given key that is not unknown. -}
 baseMember : comparable -> ResourceBase euser comparable v -> Bool
 baseMember key = baseAt key >> isNotUnknown
 
 
-{-| Use one of the many knowledge manipulation primitives on the knowledge at a particular location in a knowledge base. -}
+{-| Use one of the many resource manipulation primitives on the resource at a particular location in a resource base. -}
 baseDo : (Resource euser v -> Resource euser v) -> comparable -> ResourceBase euser comparable v -> ResourceBase euser comparable v
 baseDo transform key kbase =
   let
@@ -756,15 +778,15 @@ baseDo transform key kbase =
     }
 
 
-{-| Transform a knowledge base delta using `therefore`. This is very useful for mapping a signal of
-deltas on to multiple knowledge types, then maintaining several synchronized knowledge bases very
+{-| Transform a resource base delta using `therefore`. This is very useful for mapping a signal of
+deltas on to multiple resource types, then maintaining several synchronized resource bases very
 efficiently. -}
 baseDeltaTherefore : (v -> v') -> ResourceBaseDelta euser comparable v -> ResourceBaseDelta euser comparable v'
 baseDeltaTherefore xdcr (key, kb') =
   (key, therefore xdcr kb')
 
 
-{-| Transform a knowledge base delta using any knowledge primitive that does not change the knowledge
+{-| Transform a resource base delta using any resource primitive that does not change the resource
 type. This is the meat and potatoes of ResourceBase. This can be used for operations and any of the
 reductions. -}
 baseDeltaMap : (Resource euser v -> Resource euser v) -> ResourceBaseDelta euser comparable v -> ResourceBaseDelta euser comparable v
@@ -772,7 +794,7 @@ baseDeltaMap transform (key, kb') =
   (key, transform kb')
 
 
-{-| Apply a knowledge base delta to the knowledge base. You are responsible for determining the order
+{-| Apply a resource base delta to the resource base. You are responsible for determining the order
 of the updates. -}
 baseUpdate : ResourceBaseDelta euser comparable v -> ResourceBase euser comparable v -> ResourceBase euser comparable v
 baseUpdate (key, kb') kbase =
@@ -781,18 +803,18 @@ baseUpdate (key, kb') kbase =
   }
 
 
-{-| For every new operation in the knowledge base, get and aggregate the remote tasks, producing
+{-| For every new operation in the resource base, get and aggregate the remote tasks, producing
 Just an opaque query task or Nothing in the case that no operations need to be done. Note that this
-will only traverse the knowledge which has changed since the last call to `baseIntegrate`, so this
-scales quite well to large knowledge bases. -}
+will only traverse the resource which has changed since the last call to `baseIntegrate`, so this
+scales quite well to large resource bases. -}
 baseQuery : ResourceBase euser comparable v -> Maybe (QueryTask never)
 baseQuery kbase =
   baseDeltaDictQuery_ kbase.config kbase.deltas
 
 
-{-| Transform all new operations in to `pendingResource` across the knowledge base. Note that this
-will only traverse the knowledge which has changed since the last call to `baseIntegrate`, so this
-scales quite well to large knowledge bases. -}
+{-| Transform all new operations in to `pendingResource` across the resource base. Note that this
+will only traverse the resource which has changed since the last call to `baseIntegrate`, so this
+scales quite well to large resource bases. -}
 baseIntegrate : ResourceBase euser comparable v -> ResourceBase euser comparable v
 baseIntegrate kbase =
   { kbase
@@ -804,10 +826,10 @@ baseIntegrate kbase =
 {-- KNOWLEDGE RECORD --}
 
 
-{-| Create a knowledge record stub. The content of the knowledge base will be bound to the content
-of the record according to the `recordField` definitions you give. A knowledge record stub is not
+{-| Create a resource record stub. The content of the resource base will be bound to the content
+of the record according to the `recordField` definitions you give. A resource record stub is not
 yet completed with a concrete userrecord. Use this in your definitions. Create instances of your
-knowledge record type by using `recordSet` on the result of `record`. -}
+resource record type by using `recordSet` on the result of `record`. -}
 record : Signal.Address (ResourceBaseDelta euser comparable v) -> ResourceRecordStub euser userrecord comparable v
 record address =
   { kbase = base address
@@ -816,8 +838,8 @@ record address =
   }
 
 
-{-| Completely replace the userrecord instance contained in a knowledge record or fill out a
-knowledge record stub for the first time. The second usage is likely to be more common. -}
+{-| Completely replace the userrecord instance contained in a resource record or fill out a
+resource record stub for the first time. The second usage is likely to be more common. -}
 recordSet
   :  userrecord
   -> { k
@@ -836,9 +858,9 @@ recordSet rec kstub =
 
 
 
-{-| Map a record field to a key in the knowledge base. The types in the record can be any odd combination
+{-| Map a record field to a key in the resource base. The types in the record can be any odd combination
 given that the userrecord type can be anything. However, all fields in the record must have a mapping to
-and from some knowledge type which can represent any of the fields. This is not as tricky as one might
+and from some resource type which can represent any of the fields. This is not as tricky as one might
 initially surmise. Your userrecord type should have a corresponding tag union type with a tag for each
 record field. To make this clean, you should have a bijection between the record fields and the tags. Here's
 an example:
@@ -880,17 +902,17 @@ recordErrorHandler errorHandler krecord =
   }
 
 
-{-| Get the current userrecord content of a knowledge record. -}
+{-| Get the current userrecord content of a resource record. -}
 recordContent : ResourceRecord euser userrecord comparable v -> userrecord
 recordContent = .record
 
 
-{-| Get the underlying knowledge base of a knowledge record. -}
+{-| Get the underlying resource base of a resource record. -}
 recordBinding : ResourceRecord euser userrecord comparable v -> ResourceBase euser comparable v
 recordBinding = .kbase
 
 
-{-| Retrieve a knowledge from the knowledge record using some getter. Avoiding stringly-typed nonsense that you can't protect from
+{-| Retrieve a resource from the resource record using some getter. Avoiding stringly-typed nonsense that you can't protect from
 runtime errors is generally a good idea. Since records have an enumerable set of contant field names, it makes more sense to use
 this method to get from records. This won't compile if it's wrong. For example:
 
@@ -901,21 +923,21 @@ recordAt : (userrecord -> Resource euser v) -> ResourceRecord euser userrecord c
 recordAt getter = .record >> getter
 
 
-{-| Retrieve a knowledge at the given key. If you do this, you may as well be using knowledge base.
+{-| Retrieve a resource at the given key. If you do this, you may as well be using resource base.
 However, you will get the benefit of console debug messages in the case that you try to access a
 field that doesn't exist. -}
 recordAtKey : comparable -> ResourceRecord euser userrecord comparable v -> Resource euser v
 recordAtKey = recordRead_
 
 
-{-| This is the knowledge record equivalent to baseUpdate for knowledge bases, using the same
+{-| This is the resource record equivalent to baseUpdate for resource bases, using the same
 semantics. -}
 recordUpdate : ResourceBaseDelta euser comparable v -> ResourceRecord euser userrecord comparable v -> ResourceRecord euser userrecord comparable v
 recordUpdate kbdelta krecord =
   recordWrite_ kbdelta krecord
 
 
-{-| This is the knowledge record equivalent to baseDo for knowledge bases, using the same
+{-| This is the resource record equivalent to baseDo for resource bases, using the same
 semantics. -}
 recordDo : (Resource euser v -> Resource euser v) -> comparable -> ResourceRecord euser userrecord comparable v -> ResourceRecord euser userrecord comparable v
 recordDo transform key krecord =
@@ -925,14 +947,14 @@ recordDo transform key krecord =
   |> \kb' -> recordWrite_ (key, kb') krecord
 
 
-{-| This is the knowledge record equivalent to baseQuery for knowledge bases, using the same
+{-| This is the resource record equivalent to baseQuery for resource bases, using the same
 semantics. -}
 recordQuery : ResourceRecord euser userrecord comparable v -> Maybe (QueryTask never)
 recordQuery =
   .kbase >> baseQuery
 
 
-{-| This is the knowledge record equivalent to baseIntegrate for knowledge bases, using the same
+{-| This is the resource record equivalent to baseIntegrate for resource bases, using the same
 semantics. -}
 recordIntegrate : ResourceRecord euser userrecord comparable v -> ResourceRecord euser userrecord comparable v
 recordIntegrate krecord =
@@ -953,7 +975,7 @@ toProgram modelInput model' = therefore modelInput model'
 
 
 -- NOTE : The following is the INTERNAL implementation of ResourceBase. Use ResourceBase and it's
--- functions (beginning with base, no underscore at the end) to manipulate knowledge bases.
+-- functions (beginning with base, no underscore at the end) to manipulate resource bases.
 
 recordBaseSet_ : ResourceRecord euser userrecord comparable v -> ResourceRecord euser userrecord comparable v
 recordBaseSet_ krecord =
@@ -1066,7 +1088,7 @@ baseDeltaDictIntegrate_ deltas kbdict0 =
   Dict.foldl (curry baseDeltaIntegrate_) kbdict0 deltas
 
 
--- `baseTransformAt` can be combined by currying easily with any of the above knowledge translations
+-- `baseTransformAt` can be combined by currying easily with any of the above resource translations
 -- ending in (Resource euser v -> Resource euser v)
 baseDeltaTransformAt_ : (Resource euser v -> Resource euser v) -> comparable -> BaseImpl euser comparable v -> BaseDeltaImpl euser comparable v
 baseDeltaTransformAt_ transform key kbdict =
