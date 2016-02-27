@@ -46,6 +46,8 @@ module Scaffold.App
   itself, itselfAsync, it'sErrorConnector, thisAddress, thisAddressAsync, thisForwardAddress,
   thisForwardAddressAsync, thisErrorConnector, thisForwardConnector, thisConnector,
 
+  outputView,
+
   combineDispatchments, collapseTasks, dispatchTasks, dispatchmentHasWork, dispatchmentTask,
   promoteDispatchment,
 
@@ -95,8 +97,8 @@ module Scaffold.App
 # Dispatch Actions and Errors
 @docs actionTask, actionTaskAsync, errorTask, computeTask, computedSuccess, computedSuccessAsync, noActions, nilTask
 
-# Intercept and Route Action and Error Outputs
-@docs itself, itselfAsync, it'sErrorConnector, thisAddress, thisAddressAsync, thisForwardAddress, thisForwardAddressAsync, thisErrorConnector, thisForwardConnector, thisConnector
+# Program Output Routing and Management
+@docs itself, itselfAsync, it'sErrorConnector, thisAddress, thisAddressAsync, thisForwardAddress, thisForwardAddressAsync, thisErrorConnector, thisForwardConnector, thisConnector, outputView
 
 # Handling Tasks and TaskDispatchment
 @docs combineDispatchments, collapseTasks, dispatchTasks, dispatchmentHasWork, dispatchmentTask, promoteDispatchment
@@ -941,5 +943,5 @@ it'sErrorConnector handler output =
 
 
 {-| Get the program view output. -}
-outputView : ProgramOutput a b c bad -> ViewOutput a c bad
+outputView : ProgramOutput a b c bad -> Signal c
 outputView = .view'
