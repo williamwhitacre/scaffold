@@ -879,7 +879,9 @@ an example:
     .....
 
     myResourceRecord =
-      record address { foo = 42, bar = "answer" } |> myRecordFields
+      record address
+      |> recordSet { foo = 42, bar = "answer" }
+      |> myRecordFields
 
 -}
 recordField : (Resource euser v -> userrecord -> userrecord) -> (userrecord -> Resource euser v) -> comparable -> ResourceRecord euser userrecord comparable v -> ResourceRecord euser userrecord comparable v

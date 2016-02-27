@@ -67,6 +67,8 @@ styleOut =
     [ ("position", "absolute")
     , ("top", "20px")
     , ("left", "20px")
+    , ("right", "20px")
+    , ("bottom", "20px")
     ]
 
 
@@ -155,7 +157,7 @@ output =
 
 -- Output root view.
 main : Signal Html.Html
-main = output.view'
+main = App.outputView output
 
 
 -- Use sink to run the concrete task output of the program.

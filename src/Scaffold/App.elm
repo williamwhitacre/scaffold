@@ -938,3 +938,8 @@ thisErrorConnector address handler output =
 it'sErrorConnector : (bad -> List a) -> ProgramOutput a b c bad -> ProgramOutput a b c bad
 it'sErrorConnector handler output =
   thisErrorConnector output.address handler output
+
+
+{-| Get the program view output. -}
+outputView : ProgramOutput a b c bad -> ViewOutput a c bad
+outputView = .view'
