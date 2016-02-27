@@ -46,9 +46,19 @@ module Scaffold.Machine
   maybeDispatching, maybeDispatchingAs,
   maybePresenting, maybePresentingAs,
   maybeStaging, maybeStagingAs,
-  maybeUpdating, maybeIntegrate
+  maybeUpdating, maybeIntegrate,
 
-
+  machineResource,
+  resourceGetModel,
+  resourceReplaceModel,
+  resourceDispatching,
+  resourceDispatchingAs,
+  resourceIntegrate,
+  resourceUpdating,
+  resourceStaging,
+  resourceStagingAs,
+  resourcePresenting,
+  resourcePresentingAs
 
   )
 
@@ -76,8 +86,7 @@ top of the Gigan App.
 @docs maybeDispatching, maybeDispatchingAs, maybePresenting, maybePresentingAs, maybeStaging, maybeStagingAs, maybeUpdating, maybeIntegrate
 
 # Resource Dependant Machines
-
-
+@docs machineResource, resourceGetModel, resourceReplaceModel, resourceDispatching, resourceDispatchingAs, resourceIntegrate, resourceUpdating, resourceStaging, resourceStagingAs, resourcePresenting, resourcePresentingAs
 
 -}
 
