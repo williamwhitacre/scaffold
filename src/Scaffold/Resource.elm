@@ -50,11 +50,11 @@ module Scaffold.Resource
   maybeOr, resultOr,
 
   assumeIf, assumeIfNot, assumeIfNow, assumeInCase, assumeInCaseNow,
-  decideBy, doOperation, maybeKnownNow, otherwise,
+  decideBy, doOperation, maybeKnownNow, therefore, otherwise,
 
   reduceNotKnownNowTo,
 
-  therefore, within,
+  within, withinBaseDo, withinRecordDo,
 
   dispatchIf, dispatchIfNot, dispatchInCase, dispatchInCaseNow,
 
@@ -110,11 +110,11 @@ can be composed as deeply as desired. The documentation is underway.
 # Resource from Existing non-determinant Types
 @docs maybeOr, resultOr
 
-# Make Conditional Assumptions about Resource
-@docs assumeIf, assumeIfNot, assumeIfNow, assumeInCase, assumeInCaseNow, decideBy, doOperation, maybeKnownNow, reduceNotKnownNowTo, otherwise
+# Transforming Resources
+@docs assumeIf, assumeIfNot, assumeIfNow, assumeInCase, assumeInCaseNow, decideBy, doOperation, maybeKnownNow, reduceNotKnownNowTo, therefore, otherwise
 
-# Transforming Resource
-@docs therefore, within
+# Nesting Resource Structures
+@docs within, withinBaseDo, withinRecordDo
 
 # Conditionally Dispatch Operations on Resource
 @docs dispatchIf, dispatchIfNot, dispatchInCase, dispatchInCaseNow
