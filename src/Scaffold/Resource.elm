@@ -438,7 +438,7 @@ within operation ksub =
 
 {-| Shorthand for nesting resource bases. -}
 withinBaseDo
-  :  (Resource euser sub -> Resource euser sub)
+  :  (Resource euser v -> Resource euser v)
   -> comparable
   -> BaseResource euser' euser comparable v
   -> BaseResource euser' euser comparable v
@@ -448,7 +448,7 @@ withinBaseDo transform key =
 
 {-| Shorthand for nesting resource records. -}
 withinRecordDo
-  :  (Resource euser sub -> Resource euser sub)
+  :  (Resource euser v -> Resource euser v)
   -> comparable
   -> RecordResource euser' euser userrecord comparable v
   -> RecordResource euser' euser userrecord comparable v
