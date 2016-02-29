@@ -17,13 +17,16 @@ import Task exposing (Task)
 import Time exposing (Time)
 
 
+import Collection
+
+
 -- Our action type.
 type Action =
   NoOp
 
 
 type alias Model =
-  { data : Int
+  { data : Collection () String String
   }
 
 
