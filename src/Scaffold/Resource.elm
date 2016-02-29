@@ -31,7 +31,11 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 module Scaffold.Resource
 
   (Resource,
-  ResourceTask,
+  ResourceTask, UserTask,
+  ResourceRef,
+  ResourcePath,
+
+  userTask,
 
   defResource, forbiddenResource, pendingResource, undecidedResource,
   unknownResource, voidResource, operationResource,
@@ -67,10 +71,10 @@ module Scaffold.Resource
 {-| Resource system.
 
 # Types
-@docs Resource, ResourceTask
+@docs Resource, ResourceTask, ResourceRef, ResourcePath, UserTask
 
 # Functions
-@docs defResource, forbiddenResource, pendingResource, undecidedResource, unknownResource, voidResource, operationResource, maybeOr, resultOr, assumeIf, assumeIfNot, assumeIfNow, assumeInCase, assumeInCaseNow, decideBy, maybeKnownNow, therefore, within, otherwise, dispatchIf, dispatchIfNot, dispatchInCase, dispatchInCaseNow, isUnknown, isNotUnknown, isPending, isNotPending, isUndecided, isNotUndecided, isForbidden, isNotForbidden, isVoid, isNotVoid, isNil, isNotNil, isKnown, isNotKnown, isOperation, isNotOperation, atPath, getPath, dispatch, integrate, toProgram
+@docs userTask, defResource, forbiddenResource, pendingResource, undecidedResource, unknownResource, voidResource, operationResource, maybeOr, resultOr, assumeIf, assumeIfNot, assumeIfNow, assumeInCase, assumeInCaseNow, decideBy, maybeKnownNow, therefore, within, otherwise, dispatchIf, dispatchIfNot, dispatchInCase, dispatchInCaseNow, isUnknown, isNotUnknown, isPending, isNotPending, isUndecided, isNotUndecided, isForbidden, isNotForbidden, isVoid, isNotVoid, isNil, isNotNil, isKnown, isNotKnown, isOperation, isNotOperation, atPath, getPath, dispatch, integrate, toProgram
 
 -}
 
@@ -88,7 +92,20 @@ import Lazy.List exposing (LazyList, (+++))
 
 {-| This is a Task which represents some kind of synchronization with optask data. It can also easily
 be used for long running arbitrary computations, too. It produces a Gigan Error or a Resource. -}
-type alias ResourceTask euser v = Task (Error.Error euser) (Resource euser v)
+type alias ResourceTask euser v = Task (ResourcePath, Error.Error euser) (ResourceRef euser v)
+
+
+{-| This task simplifies routing out for the user. -}
+type alias UserTask euser v = Task (Error.Error euser) (Resource euser v)
+
+
+{-| A reference to a resource, including it's path. -}
+type alias ResourceRef euser v =
+  { path : ResourcePath, resource : Resource euser v }
+
+
+{-| Used as the resource path type. -}
+type alias ResourcePath = List String
 
 
 type alias GroupStruct_ euser v =
@@ -121,7 +138,7 @@ groupStructFoldr_ f data stct =
   Dict.foldr
     (\key val data' -> Dict.get key stct.chgs
     |> Maybe.withDefault val
-    |> flip f data')
+    |> flip (f key) data')
     data
     stct.curr
 
@@ -278,14 +295,27 @@ isNotGroup : Resource euser v -> Bool
 isNotGroup = isGroup >> not
 
 
+{-| Create a task which will route the resulting resource to the given path. -}
+userTask : UserTask euser v -> ResourceTask euser v
+userTask usertask =
+  usertask
+    `andThen` (\res -> Task.succeed { resource = res, path = [ ] })
+    `onError` (\err' -> Task.fail ([ ], err'))
+
+
 comprehend : (v -> v') -> ResourceTask euser v -> ResourceTask euser v'
 comprehend xdcr optask =
-  optask `andThen` (therefore xdcr >> Task.succeed)
+  optask `andThen` (\ref -> { ref | resource = therefore xdcr ref.resource } |> Task.succeed)
+
+
+routeTo : ResourcePath -> ResourceTask euser v -> ResourceTask euser v
+routeTo path' optask =
+  optask `andThen` (\ref -> { ref | path = path' } |> Task.succeed)
 
 
 catchError : (Error.Error euser -> Resource euser v) -> ResourceTask euser v -> ResourceTask euser v
 catchError decider optask =
-  optask `onError` (decider >> Task.succeed)
+  optask `onError` (\(path', err') -> Task.succeed { path = path', resource = decider err' })
 
 
 {-| Given a resource of value type v, create a resource of value type v' by transforming the
@@ -369,7 +399,8 @@ assumeIf : (Resource euser v -> Bool) -> v -> Resource euser v -> Resource euser
 assumeIf satisfies assume kb =
   case kb of
     Operation optask ->
-      Operation (optask `andThen` (assumeIf satisfies assume >> Task.succeed))
+      Operation (optask
+        `andThen` (\ref -> { ref | resource = assumeIf satisfies assume ref.resource } |> Task.succeed))
 
     _ ->
       if satisfies kb then therefore (always assume) kb else kb
@@ -389,7 +420,8 @@ assumeInCase : (Resource euser v -> Maybe v) -> Resource euser v -> Resource eus
 assumeInCase possibleAssumption kb =
   case kb of
     Operation optask ->
-      Operation (optask `andThen` (assumeInCase possibleAssumption >> Task.succeed))
+      Operation (optask
+        `andThen` (\ref -> { ref | resource = assumeInCase possibleAssumption ref.resource } |> Task.succeed))
 
     _ ->
       Maybe.map Known (possibleAssumption kb)
@@ -402,7 +434,8 @@ dispatchIf : (Resource euser v -> Bool) -> ResourceTask euser v -> Resource euse
 dispatchIf satisfies optask kb =
   case kb of
     Operation optask ->
-      Operation (optask `andThen` (dispatchIf satisfies optask >> Task.succeed))
+      Operation (optask
+        `andThen` (\ref -> { ref | resource = dispatchIf satisfies optask ref.resource } |> Task.succeed))
 
     _ ->
       dispatchInCase (if satisfies kb then always (Just optask) else always Nothing) kb
@@ -424,7 +457,8 @@ dispatchInCase : (Resource euser v -> Maybe (ResourceTask euser v)) -> Resource 
 dispatchInCase possibleOperation kb =
   case kb of
     Operation optask ->
-      Operation (optask `andThen` (dispatchInCase possibleOperation >> Task.succeed))
+      Operation (optask
+        `andThen` (\ref -> { ref | resource = dispatchInCase possibleOperation ref.resource } |> Task.succeed))
 
     _ ->
       Maybe.map operationResource (possibleOperation kb)
@@ -465,7 +499,8 @@ dispatchInCaseNow : (Resource euser v -> Maybe (ResourceTask euser v)) -> Resour
 dispatchInCaseNow possibleOperation kb =
   case kb of
     Operation optask ->
-      Operation (optask `andThen` (dispatchInCase possibleOperation >> Task.succeed))
+      Operation (optask
+        `andThen` (\ref -> { ref | resource = dispatchInCase possibleOperation ref.resource } |> Task.succeed))
 
     _ ->
       Maybe.map operationResource (possibleOperation kb)
@@ -535,15 +570,20 @@ maybeOr nothingResource maybeValue =
 when the resource is an operation or the resource is not an operation respectively. -}
 dispatch : Resource euser v -> List (ResourceTask euser v)
 dispatch kb =
-  dispatch_ kb
+  dispatch_ [] kb
   |> Lazy.List.toList -- crunch to a normal list at top level.
 
 
-dispatch_ : Resource euser v -> LazyList (ResourceTask euser v)
-dispatch_ kb =
+dispatch_ : List String -> Resource euser v -> LazyList (ResourceTask euser v)
+dispatch_ rpath kb =
   case kb of
-    Group stct -> groupStructFoldr_ (\kb ls -> (dispatch_ kb) +++ ls) Lazy.List.empty stct
-    Operation optask -> Lazy.List.singleton (optask `onError` \err' -> Task.succeed (undecidedResource err'))
+    Group stct -> groupStructFoldr_ (\key kb ls -> (dispatch_ (key :: rpath) kb) +++ ls) Lazy.List.empty stct
+
+    Operation optask ->
+      Lazy.List.singleton
+        (routeTo (List.reverse rpath) optask
+          `onError` (\(path', err') -> Task.succeed { path = path', resource = undecidedResource err' }))
+
     _ -> Lazy.List.empty
 
 
