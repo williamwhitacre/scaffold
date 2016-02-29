@@ -2,14 +2,17 @@
 
 import Scaffold.App as App
 import Scaffold.Machine as Machine exposing (Machine)
-import Scaffold.Resource as Resource exposing (Resource)
+import Scaffold.Resource as Resource exposing (Resource, ResourceTask)
+
 
 import Html exposing (Html, div, span, button, text)
 import Html.Events exposing (onClick)
 import Html.Attributes exposing (style)
 
+
 import Signal
 import Task exposing (Task)
+
 
 import Time exposing (Time)
 
@@ -20,7 +23,7 @@ type Action =
 
 
 type alias Model =
-  { data : ResourceBase
+  { data : Int
   }
 
 

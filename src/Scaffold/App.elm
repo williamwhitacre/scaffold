@@ -838,10 +838,15 @@ runWithWork programInput startupTask =
     inputSignal = Time.timestamp (aggregatedInputs ~> Lazy.List.toList)
 
 
+    initFunction input0 =
+      (dispatchTasks [startupTask] |> programSnapshot model0, dispatchTasks [])
+      |> performCycle programInput publicAddress input0
+
+
     programFold =
-      Signal.foldp
+      Signal.Extra.foldp'
         (performCycle programInput publicAddress)
-        (dispatchTasks [startupTask] |> programSnapshot model0, dispatchTasks [])
+        initFunction
         inputSignal
 
 

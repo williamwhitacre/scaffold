@@ -13,7 +13,7 @@
         "evancz/elm-http": "3.0.0 <= v < 4.0.0",
         "evancz/virtual-dom": "2.1.0 <= v < 3.0.0",
         "lukewestby/elm-http-extra": "1.2.2 <= v < 2.0.0",
-        "williamwhitacre/scaffold": "2.2.0 <= v < 3.0.0"
+        "williamwhitacre/scaffold": "3.0.0 <= v < 4.0.0"
     },
     "elm-version": "0.16.0 <= v < 0.17.0"
 }
