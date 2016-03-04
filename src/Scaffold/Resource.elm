@@ -58,8 +58,18 @@ module Scaffold.Resource
   isKnown, isNotKnown,
   isOperation, isNotOperation,
 
+  prefixPath,
   atPath,
+  putPath,
   getPath,
+
+  chooseLeft,
+  chooseRight,
+  chooseVoid,
+  chooseNeither,
+
+  merge,
+  mergeMany,
 
   dispatch,
   integrate,
@@ -74,7 +84,7 @@ module Scaffold.Resource
 @docs Resource, ResourceTask, ResourceRef, ResourcePath, UserTask
 
 # Functions
-@docs userTask, defResource, forbiddenResource, pendingResource, undecidedResource, unknownResource, voidResource, operationResource, maybeOr, resultOr, assumeIf, assumeIfNot, assumeIfNow, assumeInCase, assumeInCaseNow, decideBy, maybeKnownNow, therefore, within, otherwise, dispatchIf, dispatchIfNot, dispatchInCase, dispatchInCaseNow, isUnknown, isNotUnknown, isPending, isNotPending, isUndecided, isNotUndecided, isForbidden, isNotForbidden, isVoid, isNotVoid, isNil, isNotNil, isKnown, isNotKnown, isOperation, isNotOperation, atPath, getPath, dispatch, integrate, toProgram
+@docs userTask, defResource, forbiddenResource, pendingResource, undecidedResource, unknownResource, voidResource, operationResource, maybeOr, resultOr, assumeIf, assumeIfNot, assumeIfNow, assumeInCase, assumeInCaseNow, decideBy, maybeKnownNow, therefore, within, otherwise, dispatchIf, dispatchIfNot, dispatchInCase, dispatchInCaseNow, isUnknown, isNotUnknown, isPending, isNotPending, isUndecided, isNotUndecided, isForbidden, isNotForbidden, isVoid, isNotVoid, isNil, isNotNil, isKnown, isNotKnown, isOperation, isNotOperation, atPath, getPath, prefixPath, putPath, merge, mergeMany, dispatch, integrate, chooseLeft, chooseRight, chooseVoid, chooseNeither, toProgram
 
 -}
 
@@ -87,6 +97,7 @@ import Task exposing (Task, andThen, onError)
 import Trampoline exposing (Trampoline)
 
 import Dict exposing (Dict)
+import Set exposing (Set)
 import Lazy.List exposing (LazyList, (+++))
 
 
@@ -125,7 +136,11 @@ groupStructMap_ f stct =
 
 
 groupChanged_ stct =
-  { curr = Dict.union stct.chgs stct.curr
+  { curr =
+    Dict.foldl
+      (\key value -> if isUnknown value then Dict.remove key else Dict.insert key value)
+      stct.curr
+      stct.chgs
   , chgs = Dict.empty
   }
 
@@ -135,16 +150,12 @@ groupStructMapChange_ f stct =
 
 
 groupStructFoldr_ f data stct =
-  Dict.foldr
-    (\key val data' -> Dict.get key stct.chgs
-    |> Maybe.withDefault val
-    |> flip (f key) data')
-    data
-    stct.curr
+  Dict.foldr f data (groupChanged_ stct |> .curr)
 
 
 groupGet_ key stct =
   Maybe.oneOf [Dict.get key stct.chgs, Dict.get key stct.curr]
+  |> Maybe.withDefault Unknown
 
 
 groupPut_ key value stct =
@@ -153,8 +164,13 @@ groupPut_ key value stct =
 
 groupUpdate_ key op stct =
   groupGet_ key stct
-  |> Maybe.map (flip (groupPut_ key) stct)
-  |> Maybe.withDefault stct
+  |> \value -> groupPut_ key (op value) stct
+
+
+groupNew_ =
+  { curr = Dict.empty
+  , chgs = Dict.empty
+  }
 
 
 {-| A resource item. -}
@@ -174,7 +190,7 @@ type Resource euser v =
   | Operation (ResourceTask euser v)
   -- known value of type v.
   | Known v
-  -- known to be a collection of string keyed v.
+  -- known to be a collection of string keyed v things.
   | Group (GroupStruct_ euser v)
 
 
@@ -354,6 +370,86 @@ atPath operation path kb =
         _ -> kb
 
 
+{-| Collision handler for nested Resources that always chooses the left hand side. -}
+chooseLeft : Resource euser v -> Resource euser v -> Resource euser v
+chooseLeft x _ = x
+
+
+{-| Collision handler for nested Resources that always chooses the right hand side. -}
+chooseRight : Resource euser v -> Resource euser v -> Resource euser v
+chooseRight _ x = x
+
+
+{-| Collision handler for nested Resources that voids collision keys. -}
+chooseVoid : Resource euser v -> Resource euser v -> Resource euser v
+chooseVoid _ _ = Void
+
+
+{-| Collision handler that removes collision keys entirely. -}
+chooseNeither : Resource euser v -> Resource euser v -> Resource euser v
+chooseNeither _ _ = Unknown
+
+
+{-| Put a resource in to a group resource at the given path. -}
+putPath : (Resource euser v -> Resource euser v -> Resource euser v) -> List String -> Resource euser v -> Resource euser v -> Resource euser v
+putPath choice path kb' kb =
+  prefixPath path kb'
+  |> merge choice kb
+
+
+{-| Create a path before the given resource. This has the effect of prefixing whatever is there
+whether concrete or a group with the given path. Thus, creating a resource path ["foo", "bar"] and
+another at ["foo", "baz"] would result in two resources that can be merged without conflicts
+guaranteed because their contents are in the `foo -> bar -> ...` and `foo -> baz -> ...` subtries
+respectively. -}
+prefixPath : List String -> Resource euser v -> Resource euser v
+prefixPath path kb =
+  List.foldr
+    (\element kb' -> Group (groupPut_ element kb' groupNew_))
+    kb
+    path
+
+
+{-| Merge can be used to assemble path fingers or existing group structures arbitrarily. A common
+usage would be to put many different resources at their own prefix paths, then merge them all by
+folding on this if your data structure is odd, otherwise use mergeMany if you are already working
+with a list. This takes a choice function that determines the outcome of two different resources
+existing at the same path, _at least one of which is concrete and not a group_. Groups merge
+automatically with eachother. -}
+merge : (Resource euser v -> Resource euser v -> Resource euser v) -> Resource euser v -> Resource euser v -> Resource euser v
+merge choice left' right' =
+  let
+    groupMerge_ lhs rhs =
+      let
+        (rhsTail, isectDict) = Dict.partition
+          (\key _ -> groupGet_ key lhs |> isUnknown)
+          (groupChanged_ rhs |> .curr)
+
+      in
+        Dict.foldl
+          (\key rhv lhs' -> merge choice (groupGet_ key lhs') rhv |> flip (groupPut_ key) lhs')
+          { lhs | chgs = Dict.union rhsTail lhs.chgs }
+          isectDict
+
+  in
+    case (left', right') of
+      (Group leftStct, Group rightStct) -> Group (groupMerge_ leftStct rightStct)
+      (Unknown, _) -> right'
+      (_, Unknown) -> left'
+      (_, _) -> choice left' right'
+
+
+{-| Merge many folds from the left over the given list of resources with merge. -}
+mergeMany : (Resource euser v -> Resource euser v -> Resource euser v) -> List (Resource euser v) -> Resource euser v
+mergeMany choice gs =
+  case gs of
+    g :: gs' ->
+      List.foldl (merge choice) g gs'
+
+    [ ] -> Void
+
+
+
 {-| Get the item at the given path. Returns unknownResource if the item _might_ exist, but the hierarchy
 does not show knowledge at the fringe (i.e., the fringe is unknown at the last known location in
 the path), but may also return voidResource to a path which is known not to exist. For example,
@@ -367,8 +463,7 @@ getPath path kb =
       case kb of
         Group stct ->
           groupGet_ element stct
-          |> Maybe.map (getPath path')
-          |> Maybe.withDefault Unknown
+          |> getPath path'
 
         Known x' -> Void
         Void -> Void
@@ -582,7 +677,7 @@ dispatch_ rpath kb =
     Operation optask ->
       Lazy.List.singleton
         (routeTo (List.reverse rpath) optask
-          `onError` (\(path', err') -> Task.succeed { path = path', resource = undecidedResource err' }))
+        |> catchError undecidedResource)
 
     _ -> Lazy.List.empty
 

@@ -2,7 +2,7 @@
 
 import Scaffold.App as App
 import Scaffold.Machine as Machine exposing (Machine)
-import Scaffold.Resource as Resource exposing (Resource, ResourceTask)
+import Scaffold.Resource as Resource exposing (Resource, UserTask)
 
 
 import Html exposing (Html, div, span, button, text)
@@ -17,21 +17,19 @@ import Task exposing (Task)
 import Time exposing (Time)
 
 
-import Collection
-
-
 -- Our action type.
-type Action =
+type ResourceAction =
   NoOp
+  | Delta (ResourceRef euser String)
+  | RevertTo Time
+  | ForgetBefore Time
 
 
-type alias Model =
-  { data : Collection () String String
-  }
+type alias ResourceModel bad dat = Dict Time (Resource bad dat)
 
 
 -- We are using Html for the output given that the Layout module relies on the now depreciated
--- Graphics.Element symachine. Layout is rewritten to use Html internally in the updated Scaffold
+-- Graphics.Element system. Layout is rewritten to use Html internally in the updated Scaffold
 -- package.
 styleOut : Html.Attribute
 styleOut =
@@ -47,20 +45,24 @@ styleOut =
 -- Initial model.
 model0 : Model
 model0 =
-  { data = 0    -- Initial value set to 0.
+  { data = Resource.voidResource    -- Initial value set to unknown.
   }
 
 
 -- Present the model.
 present : Signal.Address (List Action) -> Time -> Model -> App.ViewOutput Action Html ()
 present address now model =
-  div
-    [ styleOut ]
-    [ div
-        [ ]
-        [ text "Clean slate."
-        ]
-    ]
+  let
+    presentListItems
+
+  in
+    div
+      [ styleOut ]
+      [ div
+          [ ]
+          [ text "Clean slate."
+          ]
+      ]
 
   -- Make a ViewOutput
   |> App.presented
