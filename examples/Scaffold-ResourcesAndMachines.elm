@@ -2,7 +2,7 @@
 
 import Scaffold.App as App
 import Scaffold.Machine as Machine exposing (Machine)
-import Scaffold.Resource as Resource exposing (Resource, UserTask)
+import Scaffold.Resource as Resource exposing (Resource, ResourceRef, UserTask, ResourceTask)
 
 
 import Html exposing (Html, div, span, button, text)
@@ -17,15 +17,17 @@ import Task exposing (Task)
 import Time exposing (Time)
 
 
+type alias TreeItem = (String, String)
+
+
 -- Our action type.
-type ResourceAction =
-  NoOp
-  | Delta (ResourceRef euser String)
-  | RevertTo Time
-  | ForgetBefore Time
+type Action =
+  Delta (ResourceRef () TreeItem)
+  | Dispatch (ResourceTask () TreeItem)
 
 
-type alias ResourceModel bad dat = Dict Time (Resource bad dat)
+type alias Model =
+  Resource () TreeItem
 
 
 -- We are using Html for the output given that the Layout module relies on the now depreciated
@@ -47,6 +49,45 @@ model0 : Model
 model0 =
   { data = Resource.voidResource    -- Initial value set to unknown.
   }
+
+
+presentItem : Signal.Address (List Action) -> Time -> TreeItem -> App.ViewOutput Action Html ()
+presentItem address now (key, datum) =
+  Html.div
+    [ ("display", "inline-block") ] -- attribs
+    [ Html.h3 "\"" ++ key ++ "\""
+    , Html.text datum
+    ] -- html items
+-- TODO: add controls!
+
+emptyHtml
+
+
+pleaseWaitHtml
+
+
+unknownHtml
+
+
+errorHtml
+
+
+presentResource : Signal.Address (List Action) -> Time -> Model -> App.ViewOutput Action Html ()
+presentResource address now res =
+  res
+  |> Resource.therefore (presentItem address now)
+  >> Resource.assumeIfNow isVoid (emptyHtml address)
+  >> Resource.assumeIfNow isPending pleaseWaitHtml
+  >> Resource.assumeInCaseNow
+    (Resource.therefore Nothing
+    >> Resource.assumeInCaseNow (unknownHtml address >> Just))
+  >> Resource.otherwise (errorHtml address)
+
+  --(\r -> if isVoid r || isPending r then Nothing else Just <| otherwiseHtml r)
+
+  --isNotKnown (otherwiseHtml address) (Scaffold.Resource.Resource euser v')
+  |> App.presented
+  |> App.withChildren [ ]
 
 
 -- Present the model.
