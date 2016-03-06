@@ -69,11 +69,12 @@ module Scaffold.Resource
   chooseVoid,
   chooseNeither,
 
-  merge,
-  mergeMany,
+  merge, mergeMany,
 
-  dispatch,
-  integrate,
+  update, updateList,
+  update', updateList',
+  dispatch, integrate,
+  deltaTo, deltaOf,
 
   toProgram)
 
@@ -121,7 +122,7 @@ For use with `merge` and `mergeMany`.
 @docs merge, mergeMany
 
 # Update Resources
-@docs dispatch, integrate
+@docs update, updateList, update', updateList', dispatch, integrate, deltaTo, deltaOf
 
 # Program Resources
 @docs toProgram
@@ -166,31 +167,37 @@ type alias GroupStruct_ euser v =
 
 
 groupStructMap_ f stct =
+  { stct | chgs = groupStructMapped_ f stct }
+
+
+groupStructMapped_ f stct =
   let
-    curr' = groupChanged_ stct |> .curr
+    curr' = groupStructChanged_ stct |> .curr
 
   in
-    { curr = Dict.map (always f) curr'
-    , chgs = Dict.empty
-    }
+    Dict.map (always f) curr'
 
 
-groupChanged_ stct =
+groupStructChanged_ stct =
   { curr =
     Dict.foldl
-      (\key value -> if isUnknown value then Dict.remove key else Dict.insert key value)
+      (\key value -> case value of
+        Unknown -> Dict.remove key
+        Group stct -> Dict.insert key (groupStructChanged_ stct |> Group)
+        _ -> Dict.insert key value)
       stct.curr
       stct.chgs
+
   , chgs = Dict.empty
   }
 
 
 groupStructMapChange_ f stct =
-  groupChanged_ { stct | chgs = Dict.map (always f) stct.chgs }
+  groupStructChanged_ { stct | chgs = Dict.map (always f) stct.chgs }
 
 
 groupStructFoldHelper_ foldf f data stct =
-  foldf f data (groupChanged_ stct |> .curr)
+  foldf f data (groupStructChanged_ stct |> .curr)
 
 
 groupStructFoldl_ f data stct =
@@ -466,7 +473,10 @@ throughoutNow f res =
 
 
 {-| Given a resource of value type v, create a resource of value type v' by transforming the
-known value or group using some function (v -> v'). -}
+known value or group using some function (v -> v'). NOTE that this will create an entirely new
+resouce structure, and thus any pending changes will be integrated immediately. If you wish to
+preserve deltas for the purpose of mirroring and efficient data flow, then one should be using
+deltaTo in order to transform just the changes. -}
 therefore : (v -> v') -> Resource euser v -> Resource euser v'
 therefore xdcr res =
   case res of
@@ -480,7 +490,7 @@ therefore xdcr res =
 
     Operation optask -> Operation (comprehend xdcr optask)
 
-    Group stct -> groupStructMap_ (therefore xdcr) stct |> Group
+    Group stct -> { curr = groupStructMapped_ (therefore xdcr) stct, chgs = Dict.empty } |> Group
 
 
 {-| DEPRECIATED version of therefore, not supporting type transformation. -}
@@ -502,6 +512,13 @@ atPath operation path res =
         _ -> res
 
 
+{-| Put a resource in to a group resource at the given path. -}
+putPath : (Resource euser v -> Resource euser v -> Resource euser v) -> List String -> Resource euser v -> Resource euser v -> Resource euser v
+putPath choice path res' res =
+  prefixPath path res'
+  |> merge choice res
+
+
 {-| Collision handler for nested Resources that always chooses the left hand side. -}
 chooseLeft : Resource euser v -> Resource euser v -> Resource euser v
 chooseLeft x _ = x
@@ -520,13 +537,6 @@ chooseVoid _ _ = Void
 {-| Collision handler that removes collision keys entirely. -}
 chooseNeither : Resource euser v -> Resource euser v -> Resource euser v
 chooseNeither _ _ = Unknown
-
-
-{-| Put a resource in to a group resource at the given path. -}
-putPath : (Resource euser v -> Resource euser v -> Resource euser v) -> List String -> Resource euser v -> Resource euser v -> Resource euser v
-putPath choice path res' res =
-  prefixPath path res'
-  |> merge choice res
 
 
 {-| Create a path before the given resource. This has the effect of prefixing whatever is there
@@ -555,7 +565,7 @@ merge choice left' right' =
       let
         (rhsTail, isectDict) = Dict.partition
           (\key _ -> groupGet_ key lhs |> isUnknown)
-          (groupChanged_ rhs |> .curr)
+          (groupStructChanged_ rhs |> .curr)
 
       in
         Dict.foldl
@@ -816,22 +826,31 @@ dispatch_ rpath res =
     _ -> Lazy.List.empty
 
 
-{-| Update the given resource by merging  -}
+{-| Update the second `Resource` argument by merging the first argument's delta `Resource`. Chooses
+the left `Resource` on a conflict, mechanically speaking. -}
 update : Resource euser v -> Resource euser v -> Resource euser v
-update = update' chooseRight
+update = update' chooseLeft
 
 
+{-| Same as `update`, but apply a list of delta resources sequentially. This resolves all conflicts
+by `chooseLeft`, which favors the deltas always. -}
 updateList : List (Resource euser v) -> Resource euser v -> Resource euser v
-updateList = updateList' chooseRight
+updateList = updateList' chooseLeft
 
 
+{-| Same as `update`, but pass the given conflict resolution choice function to `merge` instead of
+`chooseLeft`, which is the default. This allows one to make a selection as to whether or not the
+given delta is still relevant. -}
 update' : (Resource euser v -> Resource euser v -> Resource euser v) -> Resource euser v -> Resource euser v -> Resource euser v
 update' mergeChoice = merge mergeChoice
 
 
+{-| Same as `updateList`, but uses the provided conflict resolution choice function instead of
+`chooseLeft` as in `updateList`. This allows one to make a selection as to whether or not the
+given delta is still relevant. -}
 updateList' : (Resource euser v -> Resource euser v -> Resource euser v) -> List (Resource euser v) -> Resource euser v -> Resource euser v
 updateList' mergeChoice deltas res =
-  mergeMany mergeChoice (res :: deltas)
+  mergeMany (flip mergeChoice) (res :: deltas)
 
 
 {-| Given some configuration and a resource, produce a pendingResource in the case that the
@@ -844,6 +863,38 @@ integrate res =
     _ -> res
 
 
-{-| -}
+{-| `deltaTo` applies the given transformation function to the pending changes to the
+`Resource` structure, producing a partial structure representing only what has changed since the
+last call to `integrate`. The resulting partial structure is intended for use as a delta, to be
+passed to `update` for some other Resource structure. This results in a simple one-way data binding.
+
+To introduce k-way data binding, one need only use the `interpret` function to transform the
+`ResourceTask` output of the subordinate views back in to deltas that transform the origin
+`Resource` structure. NOTE that this implies when one wishes for the origin structure to reflect
+changes to one of it's subordinates, one must dispatch UserTasks that succeed with the intended
+changes. This can be very clean as long as there is a bijection between the origin structure
+and each of it's subordinates. The complexity of the mapping is of course dependent on your record
+design, so one must still take care. -}
+deltaTo : (Resource euser v -> Resource euser v') -> Resource euser v -> Resource euser v'
+deltaTo f res =
+  case res of
+    Group stct ->
+      Dict.foldl
+        (\key res'' grp -> update (prefixPath [key] (f res'')) grp)
+        (Group groupNew_)
+        stct.chgs
+
+    Operation optask -> Pending
+    _ -> f res
+
+
+{-| Like `deltaTo`, but without the transformation. The following equivalency holds -}
+deltaOf : Resource euser v -> Resource euser v
+deltaOf = deltaTo identity
+
+
+{-| Convert a resource to program input. I've found that this is a very un-Elm-like way
+of doing things that makes the Elm Architecture harder to stick to. If anyone else finds a
+counterexample, please let me know! If it does turn out to be useful, I will complete the set. -}
 toProgram : (b -> ProgramInput a b c bad) -> Resource euser b -> Resource euser (ProgramInput a b c bad)
 toProgram modelInput model' = therefore modelInput model'
