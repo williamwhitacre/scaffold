@@ -35,17 +35,18 @@ module Scaffold.Resource
   ResourceRef,
   ResourcePath,
 
-  userTask,
+  userTask, deltaTask,
 
   defResource, forbiddenResource, pendingResource, undecidedResource,
-  unknownResource, voidResource, operationResource,
+  unknownResource, voidResource, operationResource, groupResource,
 
   maybeOr, resultOr,
 
   assumeIf, assumeIfNot, assumeIfNow, assumeInCase, assumeInCaseNow,
   decideBy, maybeKnownNow,
 
-  therefore, within, otherwise,
+  comprehend, interpret, routeTo, catchError,
+  collapse, flatten, throughout, throughoutNow, therefore, within, otherwise,
 
   dispatchIf, dispatchIfNot, dispatchInCase, dispatchInCaseNow,
 
@@ -83,8 +84,50 @@ module Scaffold.Resource
 # Types
 @docs Resource, ResourceTask, ResourceRef, ResourcePath, UserTask
 
-# Functions
-@docs userTask, defResource, forbiddenResource, pendingResource, undecidedResource, unknownResource, voidResource, operationResource, maybeOr, resultOr, assumeIf, assumeIfNot, assumeIfNow, assumeInCase, assumeInCaseNow, decideBy, maybeKnownNow, therefore, within, otherwise, dispatchIf, dispatchIfNot, dispatchInCase, dispatchInCaseNow, isUnknown, isNotUnknown, isPending, isNotPending, isUndecided, isNotUndecided, isForbidden, isNotForbidden, isVoid, isNotVoid, isNil, isNotNil, isKnown, isNotKnown, isOperation, isNotOperation, atPath, getPath, prefixPath, putPath, merge, mergeMany, dispatch, integrate, chooseLeft, chooseRight, chooseVoid, chooseNeither, toProgram
+# Define Resources
+@docs defResource, forbiddenResource, pendingResource, undecidedResource, unknownResource, voidResource, operationResource, groupResource
+
+# Interpret `Maybe` or `Result` as Resources
+@docs maybeOr, resultOr
+
+# Conditional Assumptions
+@docs assumeIf, assumeIfNot, assumeIfNow, assumeInCase, assumeInCaseNow
+
+# Assorted
+@docs
+
+# Resource Output
+@docs otherwise, maybeKnownNow
+
+# Bulk Operations
+@docs decideBy, flatten, collapse, throughout, throughoutNow, therefore, within
+
+# Handling `UserTask` and `ResourceTask`
+@docs userTask, deltaTask, comprehend, interpret, routeTo, catchError
+
+# Conditional Operations
+@docs dispatchIf, dispatchIfNot, dispatchInCase, dispatchInCaseNow
+
+# Resource Introspection Predicates
+@docs isUnknown, isNotUnknown, isPending, isNotPending, isUndecided, isNotUndecided, isForbidden, isNotForbidden, isVoid, isNotVoid, isNil, isNotNil, isKnown, isNotKnown, isOperation, isNotOperation
+
+# Manipulate and Use `ResourcePath`
+@docs prefixPath, atPath, putPath, getPath
+
+# Built-in Conflict Operators
+
+For use with `merge` and `mergeMany`.
+
+@docs chooseLeft, chooseRight, chooseVoid, chooseNeither
+
+# Merge Resource Groups
+@docs merge, mergeMany
+
+# Update Resources
+@docs dispatch, integrate
+
+# Program Resources
+toProgram
 
 -}
 
@@ -149,8 +192,16 @@ groupStructMapChange_ f stct =
   groupChanged_ { stct | chgs = Dict.map (always f) stct.chgs }
 
 
+groupStructFoldHelper_ foldf f data stct =
+  foldf f data (groupChanged_ stct |> .curr)
+
+
+groupStructFoldl_ f data stct =
+  groupStructFoldHelper_ Dict.foldl f data stct
+
+
 groupStructFoldr_ f data stct =
-  Dict.foldr f data (groupChanged_ stct |> .curr)
+  groupStructFoldHelper_ Dict.foldr f data stct
 
 
 groupGet_ key stct =
@@ -196,8 +247,8 @@ type Resource euser v =
 
 {-| True if the resource is unknownResource. -}
 isUnknown : Resource euser v -> Bool
-isUnknown kb =
-  case kb of
+isUnknown res =
+  case res of
     Unknown -> True
     _ -> False
 
@@ -209,8 +260,8 @@ isNotUnknown = isUnknown >> not
 
 {-| True if the resource is pendingResource. -}
 isPending : Resource euser v -> Bool
-isPending kb =
-  case kb of
+isPending res =
+  case res of
     Pending -> True
     _ -> False
 
@@ -221,8 +272,8 @@ isNotPending = isPending >> not
 
 {-| True if the resource is voidResource. -}
 isVoid : Resource euser v -> Bool
-isVoid kb =
-  case kb of
+isVoid res =
+  case res of
     Void -> True
     _ -> False
 
@@ -234,8 +285,8 @@ isNotVoid = isVoid >> not
 
 {-| True if the resource is unknownResource or voidResource. -}
 isNil : Resource euser v -> Bool
-isNil kb =
-  case kb of
+isNil res =
+  case res of
     Unknown -> True
     Void -> True
     _ -> False
@@ -248,8 +299,8 @@ isNotNil = isNil >> not
 
 {-| True if the resource is undecidedResource. -}
 isUndecided : Resource euser v -> Bool
-isUndecided kb =
-  case kb of
+isUndecided res =
+  case res of
     Undecided _ -> True
     _ -> False
 
@@ -261,8 +312,8 @@ isNotUndecided = isUndecided >> not
 
 {-| True if the resource is forbiddenResource. -}
 isForbidden : Resource euser v -> Bool
-isForbidden kb =
-  case kb of
+isForbidden res =
+  case res of
     Forbidden _ -> True
     _ -> False
 
@@ -274,8 +325,8 @@ isNotForbidden = isForbidden >> not
 
 {-| True if the resource is a pending operation. -}
 isOperation : Resource euser v -> Bool
-isOperation kb =
-  case kb of
+isOperation res =
+  case res of
     Operation _ -> True
     _ -> False
 
@@ -287,8 +338,8 @@ isNotOperation = isOperation >> not
 
 {-| True if the resource is known. -}
 isKnown : Resource euser v -> Bool
-isKnown kb =
-  case kb of
+isKnown res =
+  case res of
     Known _ -> True
     _ -> False
 
@@ -300,8 +351,8 @@ isNotKnown = isKnown >> not
 
 {-| True if the resource is unknownResource. -}
 isGroup : Resource euser v -> Bool
-isGroup kb =
-  case kb of
+isGroup res =
+  case res of
     Group stct -> True
     _ -> False
 
@@ -319,26 +370,120 @@ userTask usertask =
     `onError` (\err' -> Task.fail ([ ], err'))
 
 
+{-| Transform a `ResourceTask` back in to a `UserTask`, which will produce a nested `Resource`
+finger reflecting the final path output of the given `ResourceTask`. This output resource can be
+treated just like a delta using the `Resource.merge` and `Resource.mergeMany` functions to inject it
+in to the working set.  -}
+deltaTask : ResourceTask euser v -> UserTask euser v
+deltaTask optask =
+  optask
+    `andThen` (\{resource, path} -> prefixPath path resource)
+    `onError` (\(path', err') -> undecidedResource err' |> prefixPath path)
+
+
+{-| The equivalent of therefore for ResourceTasks. This allows you to map fetched data to multiple
+models with ease, as long as operations which should effect all of the models are all sunk in to
+ResourceTasks producing the base model's type. -}
 comprehend : (v -> v') -> ResourceTask euser v -> ResourceTask euser v'
 comprehend xdcr optask =
   optask `andThen` (\ref -> { ref | resource = therefore xdcr ref.resource } |> Task.succeed)
 
 
+{-| Interpret the given `ResourceTask`'s resource output by a given transform function. NOTE that this
+can be literally any function whose signature ends in `ResourceTask euser v -> ResourceTask euser v'`,
+which is of course inclusive of `ResourceTask euser v -> ResourceTask euser v'` in the case that
+`v` is the same type as `v'`. -}
+interpret : (Resource euser v -> Resource euser v') -> ResourceTask euser v -> ResourceTask euser v'
+interpret f optask =
+  optask `andThen` (\ref -> { ref | resource = f ref.resource } |> Task.succeed)
+
+
+{-| Route the results of a given `ResourceTask` to a given `ResourcePath`. -}
 routeTo : ResourcePath -> ResourceTask euser v -> ResourceTask euser v
 routeTo path' optask =
   optask `andThen` (\ref -> { ref | path = path' } |> Task.succeed)
 
 
+{-| Provide a decider that turns an error of type `Error.Error euser` in to a resource of `Resource euser v`. -}
 catchError : (Error.Error euser -> Resource euser v) -> ResourceTask euser v -> ResourceTask euser v
 catchError decider optask =
   optask `onError` (\(path', err') -> Task.succeed { path = path', resource = decider err' })
 
 
+{-| Collapses a resource tree made of group resources in to a single resource of the same type. -}
+collapse : (List (ResourcePath, Resource euser v) -> Resource euser v) -> Resource euser v -> Resource euser v
+collapse f res =
+  collapse_ f [] res
+
+
+collapse_ : (List (ResourcePath, Resource euser v) -> Resource euser v) -> List String -> Resource euser v -> Resource euser v
+collapse_ frecurse rpath res =
+  let
+    cfold key res ls = (List.reverse rpath, collapse_ f (key :: rpath) res) :: ls
+
+  in
+    case res of
+      Group stct -> groupStructFoldr_ cfold [] stct |> frecurse
+      _ -> res
+
+
+{-| Flatten the given resource if it is a group to a resource of the same type. Note that unlike
+`collapse`, this function does not recursively collapse the entire tree automatically. This grants
+a greater degree of flexibility.  -}
+flatten : (List (String, Resource euser v) -> Resource euser v) -> Resource euser v -> Resource euser v
+flatten fone res =
+  let
+    cfold key res ls = (key, res) :: ls
+
+  in
+    case res of
+      Group stct -> groupStructFoldr_ cfold [] stct |> fone
+      _ -> res
+
+
+flatten_ : (List (String, Resource euser v) -> Resource euser v) -> List String -> Resource euser v -> Resource euser v
+flatten_ f rpath res =
+  let
+    cfold key res ls = (List.reverse rpath, collapse_ f (key :: rpath) res) :: ls
+
+  in
+    case res of
+      Group stct -> f (groupStructFoldr_ cfold [] stct)
+      _ -> res
+
+
+{-| Use the given function to transform all leaf resources throughout a group structure. This
+applies to the result of any pending resource operations. -}
+throughout : (Resource euser v -> Resource euser v) -> Resource euser v -> Resource euser v
+throughout f res =
+  case res of
+    Group stct ->
+      groupStructMap_ (throughout f) stct
+      |> Group
+
+    Operation optask -> Operation (interpret (throughout f) optask)
+
+    _ -> f res
+
+
+{-| Use the given function to transform all leaf resources throughout a group structure. This version
+applies the transformation function now, even if the resource is a pending operation. This should be
+used in contexts where we are rendering some resulting view of the resources most of the time. -}
+throughoutNow : (Resource euser v -> Resource euser v) -> Resource euser v -> Resource euser v
+throughoutNow f res =
+  case res of
+    Group stct ->
+      groupStructMap_ (throughout f) stct
+      |> Group
+
+    _ -> f res
+
+
 {-| Given a resource of value type v, create a resource of value type v' by transforming the
 known value or group using some function (v -> v'). -}
 therefore : (v -> v') -> Resource euser v -> Resource euser v'
-therefore xdcr kb =
-  case kb of
+therefore xdcr res =
+  case res of
     Unknown -> Unknown
     Pending -> Pending
     Void -> Void
@@ -346,9 +491,10 @@ therefore xdcr kb =
     Undecided err' -> Undecided err'
     Forbidden err' -> Forbidden err'
     Known x' -> Known (xdcr x')
-    Group stct -> Group <| groupStructMap_ (therefore xdcr) stct
 
     Operation optask -> Operation (comprehend xdcr optask)
+
+    Group stct -> groupStructMap_ (therefore xdcr) stct |> Group
 
 
 {-| DEPRECIATED version of therefore, not supporting type transformation. -}
@@ -358,16 +504,16 @@ within = therefore
 
 {-| Manipulate an item at the given path, or else do nothing if the path does not exist. -}
 atPath : (Resource euser v -> Resource euser v) -> List String -> Resource euser v -> Resource euser v
-atPath operation path kb =
+atPath operation path res =
   case path of
-    [ ] -> operation kb
+    [ ] -> operation res
     element :: path' ->
-      case kb of
+      case res of
         Group stct ->
           groupUpdate_ element (atPath operation path') stct
           |> Group
 
-        _ -> kb
+        _ -> res
 
 
 {-| Collision handler for nested Resources that always chooses the left hand side. -}
@@ -392,9 +538,9 @@ chooseNeither _ _ = Unknown
 
 {-| Put a resource in to a group resource at the given path. -}
 putPath : (Resource euser v -> Resource euser v -> Resource euser v) -> List String -> Resource euser v -> Resource euser v -> Resource euser v
-putPath choice path kb' kb =
-  prefixPath path kb'
-  |> merge choice kb
+putPath choice path res' res =
+  prefixPath path res'
+  |> merge choice res
 
 
 {-| Create a path before the given resource. This has the effect of prefixing whatever is there
@@ -403,10 +549,10 @@ another at ["foo", "baz"] would result in two resources that can be merged witho
 guaranteed because their contents are in the `foo -> bar -> ...` and `foo -> baz -> ...` subtries
 respectively. -}
 prefixPath : List String -> Resource euser v -> Resource euser v
-prefixPath path kb =
+prefixPath path res =
   List.foldr
-    (\element kb' -> Group (groupPut_ element kb' groupNew_))
-    kb
+    (\element res' -> Group (groupPut_ element res' groupNew_))
+    res
     path
 
 
@@ -434,8 +580,6 @@ merge choice left' right' =
   in
     case (left', right') of
       (Group leftStct, Group rightStct) -> Group (groupMerge_ leftStct rightStct)
-      (Unknown, _) -> right'
-      (_, Unknown) -> left'
       (_, _) -> choice left' right'
 
 
@@ -449,18 +593,17 @@ mergeMany choice gs =
     [ ] -> Void
 
 
-
 {-| Get the item at the given path. Returns unknownResource if the item _might_ exist, but the hierarchy
 does not show knowledge at the fringe (i.e., the fringe is unknown at the last known location in
 the path), but may also return voidResource to a path which is known not to exist. For example,
 if foo is a resource, then foo/bar cannot be a valid path because foo is not a collection. Pending
 will be given in the case that an operation is pending. -}
 getPath : List String -> Resource euser v -> Resource euser v
-getPath path kb =
+getPath path res =
   case path of
-    [ ] -> kb
+    [ ] -> res
     element :: path' ->
-      case kb of
+      case res of
         Group stct ->
           groupGet_ element stct
           |> getPath path'
@@ -474,37 +617,37 @@ getPath path kb =
         _ -> Unknown
 
 
-{-| Offer a decision on some `undecidedResource kb`. Undecided resource is the result of some
+{-| Offer a decision on some `undecidedResource res`. Undecided resource is the result of some
 problem which may or may not be in control of the client. Such resource may be the result of
 anything that can result in an error in your application. If this resource is an operation, then
 the assumption will be applied to the result of that operation. -}
 decideBy : (Error.Error euser -> Resource euser v) -> Resource euser v -> Resource euser v
-decideBy decider kb =
-  case kb of
+decideBy decider res =
+  case res of
     Undecided err' -> decider err'
     Operation optask -> Operation (catchError decider optask)
 
-    _ -> kb
+    _ -> res
 
 
-{-| If some predicate `satisfies` is satisfied by the resource `kb`, then we make the following
+{-| If some predicate `satisfies` is satisfied by the resource `res`, then we make the following
 assumption. If this resource is an operation, then the assumption will be applied to
 the result of that operation. -}
 assumeIf : (Resource euser v -> Bool) -> v -> Resource euser v -> Resource euser v
-assumeIf satisfies assume kb =
-  case kb of
+assumeIf satisfies assume res =
+  case res of
     Operation optask ->
       Operation (optask
         `andThen` (\ref -> { ref | resource = assumeIf satisfies assume ref.resource } |> Task.succeed))
 
     _ ->
-      if satisfies kb then therefore (always assume) kb else kb
+      if satisfies res then therefore (always assume) res else res
 
 
 {-| Negation of assumeIf. -}
 assumeIfNot : (Resource euser v -> Bool) -> v -> Resource euser v -> Resource euser v
-assumeIfNot satisfies assume kb =
-  assumeIf (satisfies >> not) assume kb
+assumeIfNot satisfies assume res =
+  assumeIf (satisfies >> not) assume res
 
 
 {-| If `possibleAssumption` yields some value `value'` when a Resource is applied, then
@@ -512,34 +655,34 @@ that value is used to overwrite the resource with an assumption `Known value'`, 
 Resource is unaffected. If this resource is an operation, then the assumption will be applied
 conditionally to the result of that operation. -}
 assumeInCase : (Resource euser v -> Maybe v) -> Resource euser v -> Resource euser v
-assumeInCase possibleAssumption kb =
-  case kb of
+assumeInCase possibleAssumption res =
+  case res of
     Operation optask ->
       Operation (optask
         `andThen` (\ref -> { ref | resource = assumeInCase possibleAssumption ref.resource } |> Task.succeed))
 
     _ ->
-      Maybe.map Known (possibleAssumption kb)
-      |> Maybe.withDefault kb
+      Maybe.map Known (possibleAssumption res)
+      |> Maybe.withDefault res
 
 
-{-| If some predicate `satisfies` is satisfied by the resource `kb`, then we make the following
+{-| If some predicate `satisfies` is satisfied by the resource `res`, then we make the following
 optask. -}
 dispatchIf : (Resource euser v -> Bool) -> ResourceTask euser v -> Resource euser v -> Resource euser v
-dispatchIf satisfies optask kb =
-  case kb of
+dispatchIf satisfies optask res =
+  case res of
     Operation optask ->
       Operation (optask
         `andThen` (\ref -> { ref | resource = dispatchIf satisfies optask ref.resource } |> Task.succeed))
 
     _ ->
-      dispatchInCase (if satisfies kb then always (Just optask) else always Nothing) kb
+      dispatchInCase (if satisfies res then always (Just optask) else always Nothing) res
 
 
 {-| Negation of dispatchIf -}
 dispatchIfNot : (Resource euser v -> Bool) -> ResourceTask euser v -> Resource euser v -> Resource euser v
-dispatchIfNot satisfies optask kb =
-  dispatchIf (satisfies >> not) optask kb
+dispatchIfNot satisfies optask res =
+  dispatchIf (satisfies >> not) optask res
 
 
 {-| If `possibleOperation` yields some ResourceTask task `optask` when a Resource is applied, then
@@ -549,15 +692,15 @@ the input to the provided function. In this way, operations can be chained arbit
 but in a manner that helpfully abstracts away whether we are still waiting or already have the
 result in the composition. -}
 dispatchInCase : (Resource euser v -> Maybe (ResourceTask euser v)) -> Resource euser v -> Resource euser v
-dispatchInCase possibleOperation kb =
-  case kb of
+dispatchInCase possibleOperation res =
+  case res of
     Operation optask ->
       Operation (optask
         `andThen` (\ref -> { ref | resource = dispatchInCase possibleOperation ref.resource } |> Task.succeed))
 
     _ ->
-      Maybe.map operationResource (possibleOperation kb)
-      |> Maybe.withDefault kb
+      Maybe.map operationResource (possibleOperation res)
+      |> Maybe.withDefault res
 
 
 -- NOTE : These primitives force a reduction now even for an optask operation type
@@ -566,16 +709,16 @@ dispatchInCase possibleOperation kb =
 
 {-| If a resource is known, then give Just it's value, otherwise Nothing. -}
 maybeKnownNow : Resource euser v' -> Maybe v'
-maybeKnownNow kb' =
-  case kb' of
+maybeKnownNow res' =
+  case res' of
     Known x' -> Just x'
     _ -> Nothing
 
 
 {-| If the predicate is satisfied, replace the resource with some known value. -}
 assumeIfNow : (Resource euser v' -> Bool) -> v' -> Resource euser v' -> Resource euser v'
-assumeIfNow satisfies assumption kb' =
-  if satisfies kb' then Known assumption else kb'
+assumeIfNow satisfies assumption res' =
+  if satisfies res' then Known assumption else res'
 
 
 {-| This is the counterpart to assumeInCase which does _not_ abstract away whether or not this is
@@ -584,28 +727,28 @@ reductions because a pending operation should still have some concrete visible r
 as an ajax loader symbol. Of course, one should still correctly call *Integrate so that an operation
 is always a `pendingResource` by the time it gets past the `stage` step. -}
 assumeInCaseNow : (Resource euser v' -> Maybe v') -> Resource euser v' -> Resource euser v'
-assumeInCaseNow possibleAssumption kb' =
-  Maybe.map Known (possibleAssumption kb')
-  |> Maybe.withDefault kb'
+assumeInCaseNow possibleAssumption res' =
+  Maybe.map Known (possibleAssumption res')
+  |> Maybe.withDefault res'
 
 
 {-|  -}
 dispatchInCaseNow : (Resource euser v -> Maybe (ResourceTask euser v)) -> Resource euser v -> Resource euser v
-dispatchInCaseNow possibleOperation kb =
-  case kb of
+dispatchInCaseNow possibleOperation res =
+  case res of
     Operation optask ->
       Operation (optask
         `andThen` (\ref -> { ref | resource = dispatchInCase possibleOperation ref.resource } |> Task.succeed))
 
     _ ->
-      Maybe.map operationResource (possibleOperation kb)
-      |> Maybe.withDefault kb
+      Maybe.map operationResource (possibleOperation res)
+      |> Maybe.withDefault res
 
 
 {-|  -}
 otherwise : v' -> Resource euser v' -> v'
-otherwise assumption kb' =
-  case kb' of
+otherwise assumption res' =
+  case res' of
     Known x' -> x'
     _ -> assumption
 
@@ -646,6 +789,12 @@ defResource = Known
 
 
 {-|  -}
+groupResource : List (String, Resource euser v) -> Resource euser v
+groupResource members =
+  Group { curr = Dict.fromList members, chgs = Dict.empty }
+
+
+{-|  -}
 resultOr : (Error.Error euser -> Resource euser v) -> Result (Error.Error euser) v -> Resource euser v
 resultOr errorResource result =
   case result of
@@ -660,19 +809,18 @@ maybeOr nothingResource maybeValue =
   |> Maybe.withDefault nothingResource
 
 
-
 {-| Given some configuration and a resource, produce Just an opaque query task or Nothing
 when the resource is an operation or the resource is not an operation respectively. -}
 dispatch : Resource euser v -> List (ResourceTask euser v)
-dispatch kb =
-  dispatch_ [] kb
+dispatch res =
+  dispatch_ [] res
   |> Lazy.List.toList -- crunch to a normal list at top level.
 
 
 dispatch_ : List String -> Resource euser v -> LazyList (ResourceTask euser v)
-dispatch_ rpath kb =
-  case kb of
-    Group stct -> groupStructFoldr_ (\key kb ls -> (dispatch_ (key :: rpath) kb) +++ ls) Lazy.List.empty stct
+dispatch_ rpath res =
+  case res of
+    Group stct -> groupStructFoldr_ (\key res' ls -> (dispatch_ (key :: rpath) res') +++ ls) Lazy.List.empty stct
 
     Operation optask ->
       Lazy.List.singleton
@@ -682,14 +830,32 @@ dispatch_ rpath kb =
     _ -> Lazy.List.empty
 
 
+{-| Update the given resource by merging  -}
+update : Resource euser v -> Resource euser v -> Resource euserv
+update = update' chooseRight
+
+
+updateList : List (Resource euser v) -> Resource euser v -> Resource euserv
+updateList = updateList' chooseRight
+
+
+update' : (Resource euser v -> Resource euser v -> Resource euser v) -> Resource euser v -> Resource euser v -> Resource euserv
+update' mergeChoice delta res = merge mergeChoice
+
+
+updateList' : (Resource euser v -> Resource euser v -> Resource euser v) -> List (Resource euser v) -> Resource euser v -> Resource euserv
+updateList' mergeChoice deltas res =
+  mergeMany mergeChoice (res :: deltas)
+
+
 {-| Given some configuration and a resource, produce a pendingResource in the case that the
 resource is an operation, otherwise give the same resource. -}
 integrate : Resource euser v -> Resource euser v
-integrate kb =
-  case kb of
+integrate res =
+  case res of
     Group stct -> groupStructMapChange_ integrate stct |> Group
     Operation optask -> Pending
-    _ -> kb
+    _ -> res
 
 
 {-| -}

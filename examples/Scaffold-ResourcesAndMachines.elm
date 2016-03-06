@@ -8,6 +8,7 @@ import Scaffold.Resource as Resource exposing (Resource, ResourceRef, UserTask, 
 import Html exposing (Html, div, span, button, text)
 import Html.Events exposing (onClick)
 import Html.Attributes exposing (style)
+import Html.Lazy as HL
 
 
 import Signal
@@ -26,7 +27,7 @@ type Action =
   | Dispatch (ResourceTask () TreeItem)
 
 
-type alias Model =
+type alias ModelResource =
   Resource () TreeItem
 
 
@@ -44,21 +45,44 @@ styleOut =
     ]
 
 
+styleItem : Html.Attribute
+styleItem =
+  style
+    [ ("display", "inline-block")
+    ]
+
+
 -- Initial model.
-model0 : Model
-model0 =
-  { data = Resource.voidResource    -- Initial value set to unknown.
-  }
+model0 : ModelResource
+model0 = Resource.voidResource    -- Initial value set to unknown.
 
 
-presentItem : Signal.Address (List Action) -> Time -> TreeItem -> App.ViewOutput Action Html ()
-presentItem address now (key, datum) =
-  Html.div
-    [ ("display", "inline-block") ] -- attribs
+renderItem : Signal.Address (List Action) -> Time -> TreeItem -> Html
+renderItem address now (key, datum) =
+  HL.lazy2 Html.div
+    [ styleItem ] -- attribs
     [ Html.h3 "\"" ++ key ++ "\""
     , Html.text datum
     ] -- html items
 -- TODO: add controls!
+
+
+renderUnknown : Signal.Address (List Action) -> Time -> TreeItem
+
+
+-- remember that ModelResource = Resource () TreeItem
+renderResource : Signal.Address (List Action) -> Time -> ModelResource -> Html
+renderResource address now (key, datum)
+  Resource.therefore (renderItem address now) res
+  |> Resource.assumeIfNow Resource.isVoid (renderItem address now (key, "Sorry, nothing was found."))
+  |> Resource.assumeIfNow Resource.isPending (renderItem address now (key, "Please wait..."))
+  -- assumeInCase* family takes a function `Resource euser v -> Maybe v` which should return Nothing
+  -- if no assumption is to be made in which case the resulting resource will be the argument.
+  -- Otherwise Just x should be returned, where `x` is of type `v`. The latter results in a some
+  -- resource `res` where `res == defResource x`.
+  |> Resource.assumeInCaseNow
+      (Resource.therefore Nothing >> Resource.assumeInCaseNow (renderUnknown address >> Just))
+  |> Resource.otherwise (errorHtml address)
 
 emptyHtml
 
@@ -72,26 +96,26 @@ unknownHtml
 errorHtml
 
 
-presentResource : Signal.Address (List Action) -> Time -> Model -> App.ViewOutput Action Html ()
+presentResource : Signal.Address (List Action) -> Time -> ModelResource -> App.ViewOutput Action Html ()
 presentResource address now res =
-  res
-  |> Resource.therefore (presentItem address now)
-  >> Resource.assumeIfNow isVoid (emptyHtml address)
-  >> Resource.assumeIfNow isPending pleaseWaitHtml
-  >> Resource.assumeInCaseNow
-    (Resource.therefore Nothing
-    >> Resource.assumeInCaseNow (unknownHtml address >> Just))
-  >> Resource.otherwise (errorHtml address)
+  Resource.therefore (presentItem address now) res
+  |> Resource.assumeIfNow Resource.isVoid (emptyHtml address)
+  |> Resource.assumeIfNow Resource.isPending pleaseWaitHtml
+  -- assumeInCase* family takes a function (Resource euser v -> Maybe v) which should return Nothing
+  -- if no assumption is to be made (the resulting resource will be the argument), otherwise
+  -- Just x should be returned, where x is of type v.
+  |> Resource.assumeInCaseNow
+      (Resource.therefore Nothing >> Resource.assumeInCaseNow (unknownHtml address >> Just))
+  |> Resource.otherwise (errorHtml address)
 
-  --(\r -> if isVoid r || isPending r then Nothing else Just <| otherwiseHtml r)
+  |> Resource.
 
-  --isNotKnown (otherwiseHtml address) (Scaffold.Resource.Resource euser v')
   |> App.presented
   |> App.withChildren [ ]
 
 
 -- Present the model.
-present : Signal.Address (List Action) -> Time -> Model -> App.ViewOutput Action Html ()
+present : Signal.Address (List Action) -> Time -> ModelResource -> App.ViewOutput Action Html ()
 present address now model =
   let
     presentListItems
@@ -110,14 +134,14 @@ present address now model =
 
 
 -- Update the model. Nothing unfamiliar here.
-update : Action -> Time -> Model -> App.UpdatedModel Action Model ()
+update : Action -> Time -> ModelResource -> App.UpdatedModel Action ModelResource ()
 update action now model =
   case action of
     NoOp -> App.updated model
 
 
 -- Set up the program.
-output : App.ProgramOutput Action Model Html ()
+output : App.ProgramOutput Action ModelResource Html ()
 output =
   App.defProgram present update model0 -- Define your top level program. (defProgram' to use staging.)
   |> App.run     -- Invoke the configured ProgramInput to get a ProgramOutput
