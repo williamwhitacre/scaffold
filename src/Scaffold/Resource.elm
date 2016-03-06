@@ -93,9 +93,6 @@ module Scaffold.Resource
 # Conditional Assumptions
 @docs assumeIf, assumeIfNot, assumeIfNow, assumeInCase, assumeInCaseNow
 
-# Assorted
-@docs
-
 # Resource Output
 @docs otherwise, maybeKnownNow
 
@@ -127,7 +124,7 @@ For use with `merge` and `mergeMany`.
 @docs dispatch, integrate
 
 # Program Resources
-toProgram
+@docs toProgram
 
 -}
 
@@ -377,8 +374,8 @@ in to the working set.  -}
 deltaTask : ResourceTask euser v -> UserTask euser v
 deltaTask optask =
   optask
-    `andThen` (\{resource, path} -> prefixPath path resource)
-    `onError` (\(path', err') -> undecidedResource err' |> prefixPath path)
+    `andThen` (\{resource, path} -> prefixPath path resource |> Task.succeed)
+    `onError` (\(path', err') -> undecidedResource err' |> prefixPath path' |> Task.succeed)
 
 
 {-| The equivalent of therefore for ResourceTasks. This allows you to map fetched data to multiple
@@ -419,7 +416,7 @@ collapse f res =
 collapse_ : (List (ResourcePath, Resource euser v) -> Resource euser v) -> List String -> Resource euser v -> Resource euser v
 collapse_ frecurse rpath res =
   let
-    cfold key res ls = (List.reverse rpath, collapse_ f (key :: rpath) res) :: ls
+    cfold key res ls = (List.reverse rpath, collapse_ frecurse (key :: rpath) res) :: ls
 
   in
     case res of
@@ -438,17 +435,6 @@ flatten fone res =
   in
     case res of
       Group stct -> groupStructFoldr_ cfold [] stct |> fone
-      _ -> res
-
-
-flatten_ : (List (String, Resource euser v) -> Resource euser v) -> List String -> Resource euser v -> Resource euser v
-flatten_ f rpath res =
-  let
-    cfold key res ls = (List.reverse rpath, collapse_ f (key :: rpath) res) :: ls
-
-  in
-    case res of
-      Group stct -> f (groupStructFoldr_ cfold [] stct)
       _ -> res
 
 
@@ -831,19 +817,19 @@ dispatch_ rpath res =
 
 
 {-| Update the given resource by merging  -}
-update : Resource euser v -> Resource euser v -> Resource euserv
+update : Resource euser v -> Resource euser v -> Resource euser v
 update = update' chooseRight
 
 
-updateList : List (Resource euser v) -> Resource euser v -> Resource euserv
+updateList : List (Resource euser v) -> Resource euser v -> Resource euser v
 updateList = updateList' chooseRight
 
 
-update' : (Resource euser v -> Resource euser v -> Resource euser v) -> Resource euser v -> Resource euser v -> Resource euserv
-update' mergeChoice delta res = merge mergeChoice
+update' : (Resource euser v -> Resource euser v -> Resource euser v) -> Resource euser v -> Resource euser v -> Resource euser v
+update' mergeChoice = merge mergeChoice
 
 
-updateList' : (Resource euser v -> Resource euser v -> Resource euser v) -> List (Resource euser v) -> Resource euser v -> Resource euserv
+updateList' : (Resource euser v -> Resource euser v -> Resource euser v) -> List (Resource euser v) -> Resource euser v -> Resource euser v
 updateList' mergeChoice deltas res =
   mergeMany mergeChoice (res :: deltas)
 
