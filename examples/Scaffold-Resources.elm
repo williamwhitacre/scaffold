@@ -111,10 +111,11 @@ renderBad styleAttrib address res =
   HL.lazy2 Html.div [ styleAttrib ] [ HL.lazy Html.text ((++) "Unexpected Resource Tag :: " <| toString res) ]
 
 
+render : RenderContext -> Signal.Address (List Action) -> ModelResource -> 
+
 renderGroup : RenderContext -> Signal.Address (List Action) -> ModelResource -> Html
 renderGroup renderContext address res =
-
-  Resource.assumeInCaseNow
+  Resource.flatten
 
 
 -- remember that ModelResource = Resource () TreeItem
@@ -149,8 +150,8 @@ present address now model =
 -- collapse : (comparable -> Resource euser v -> v -> Resource euser v) -> v -> Resource euser v -> Resource euser v
 
 -- Update the model. Nothing unfamiliar here.
-stage : RenderContext -> Signal.Address (List Action) -> Time -> ModelResource -> App.UpdatedModel Action Model ()
-stage renderContext address now model =
+stage : Signal.Address (List Action) -> Time -> ModelResource -> App.UpdatedModel Action Model ()
+stage address now model =
 
 
   let

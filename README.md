@@ -1,11 +1,22 @@
 # Scaffold
 
-## [An example to tide you over.](https://github.com/williamwhitacre/scaffold/blob/master/examples/Scaffold-DynamicCounter.elm)
+## Use this.
+
+#### [Example 1 - Boilerplate](https://github.com/williamwhitacre/scaffold/blob/master/examples/Scaffold-Boilerplate.elm)
+#### [Example 2 - Dynamic Counter](https://github.com/williamwhitacre/scaffold/blob/master/examples/Scaffold-DynamicCounter.elm)
+#### [Example 3 - Resources](https://github.com/williamwhitacre/scaffold/blob/master/examples/Scaffold-Resources.elm) -- ___Note___ **that this example is not complete, but will be working fully by the end of Monday (7 Mar 2016).**
+
 
 ## This is not an alternative architecture.
 
 This scaffolding is intended to provide a set of very useful types and DSL libraries to help make your Elm Architecture code softer and more semantically understandable. It incorporates Time as an argument to each user provided function and also provides an optional intermediate `stage` function between `update` and `present` which gives us the opportunity to use memoization, any sorts of expensive view staging algorithms we would only want to do once per atomic batch of updates at the end before viewing, any sorts of view recompute optimizations.
 
+
+# NOTE:
+
+The remainder of `README.md` is relevant because is has a (probably typo ridden) explanation of some of the rationale. It is not however complete or reviewed thoroughly for correctness at the time of this writing (6 Mar 2016). Significant work will be put in to updating the package overall.
+
+Again, [Example 1 - Boilerplate](https://github.com/williamwhitacre/scaffold/blob/master/examples/Scaffold-Boilerplate.elm) and [Example 2 - Dynamic Counter](https://github.com/williamwhitacre/scaffold/blob/master/examples/Scaffold-DynamicCounter.elm) are *definitely* the best place to play with some working code at the moment. I will update this again immediately following completion of *Example 3*.
 
 # What's available?
 
