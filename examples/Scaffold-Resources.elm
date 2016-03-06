@@ -23,12 +23,16 @@ type alias TreeItem = (String, String)
 
 -- Our action type.
 type Action =
-  Delta (ResourceRef () TreeItem)
-  | Dispatch (ResourceTask () TreeItem)
+  Delta (Resource () TreeItem)
+  | Dispatch (UserTask () TreeItem)
 
 
 type alias ModelResource =
   Resource () TreeItem
+
+
+type alias ViewResource =
+  Resource () Html
 
 
 type alias RenderContext =
@@ -36,6 +40,13 @@ type alias RenderContext =
   , voidStyle : Html.Attribute
   , pendingStyle : Html.Attribute
   , knownStyle : Html.Attribute
+  }
+
+
+type alias Model =
+  { renderContext : RenderContext
+  , resources : ModelResource
+  , views : ViewResource
   }
 
 
@@ -76,18 +87,23 @@ defaultRenderContext =
 
 
 -- Initial model.
-model0 : ModelResource
-model0 = Resource.voidResource    -- Initial value set to unknown.
+model0 : Model
+model0 =
+  { resources = Resource.groupResource
+      [ ("foo", Resource.defResource "foo value")
+      , ("bar", Resource.defResource "bar value")
+      , ("baz", Resource.defResource "baz value")
+      ]
+  , renderContext = defaultRenderContext
+  }
 
 
+-- TODO: add controls!
 renderItem : Html.Attribute -> Signal.Address (List Action) -> TreeItem -> Html
 renderItem styleAttrib address (key, datum) =
   HL.lazy2 Html.div
-    [ styleAttrib ] -- attribs
-    [ Html.h3 "\"" ++ key ++ "\""
-    , Html.text datum
-    ] -- html items
--- TODO: add controls!
+    [ styleAttrib ]                              -- attribs
+    [ Html.text "\"" ++ key ++ "\": " ++ datum ] -- html items
 
 
 renderBad : Html.Attribute -> Signal.Address (List Action) -> ModelResource -> Html
@@ -95,10 +111,19 @@ renderBad styleAttrib address res =
   HL.lazy2 Html.div [ styleAttrib ] [ HL.lazy Html.text ((++) "Unexpected Resource Tag :: " <| toString res) ]
 
 
+renderGroup : RenderContext -> Signal.Address (List Action) -> ModelResource -> Html
+renderGroup renderContext address res =
+
+  Resource.assumeInCaseNow
+
+
 -- remember that ModelResource = Resource () TreeItem
-renderModelResource : RenderContext -> Signal.Address (List Action) -> Time -> ModelResource -> Html
-renderModelResource renderContext address res =
+renderLeaf : RenderContext -> Signal.Address (List Action) -> ModelResource -> Html
+renderLeaf renderContext address res =
   Resource.therefore (HL.lazy3 renderItem renderContext.knownStyle address) res
+
+  |> Resource.assumeInCaseNow
+      (\res' -> if isGroup res' then renderGroup renderContext address res' )
 
   -- replace me with a control.
   |> Resource.assumeIfNow Resource.isVoid
@@ -113,9 +138,9 @@ renderModelResource renderContext address res =
 
 
 -- Present the model.
-present : RenderContext -> Signal.Address (List Action) -> Time -> ModelResource -> App.ViewOutput Action Html ()
-present renderContext address now res =
-  renderResource
+present : Signal.Address (List Action) -> Time -> Model -> App.ViewOutput Action Html ()
+present address now model =
+  renderModelResource model.renderContext address now model.resources
 
   |> App.presented
   |> App.withChildren [ ]
@@ -124,8 +149,10 @@ present renderContext address now res =
 -- collapse : (comparable -> Resource euser v -> v -> Resource euser v) -> v -> Resource euser v -> Resource euser v
 
 -- Update the model. Nothing unfamiliar here.
-stage : RenderContext -> Signal.Address (List Action) -> Time -> ModelResource -> App.UpdatedModel Action ModelResource ()
-stage renderContext address now res =
+stage : RenderContext -> Signal.Address (List Action) -> Time -> ModelResource -> App.UpdatedModel Action Model ()
+stage renderContext address now model =
+
+
   let
     foldHtml key res ls =
       renderModelResource renderContext address now
