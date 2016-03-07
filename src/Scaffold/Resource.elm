@@ -58,6 +58,7 @@ module Scaffold.Resource
   isNil, isNotNil,
   isKnown, isNotKnown,
   isOperation, isNotOperation,
+  isGroup, isNotGroup,
 
   prefixPath,
   atPath,
@@ -116,7 +117,7 @@ to their respective older counterparts.
 @docs dispatchIf, dispatchIfNot, dispatchInCase, dispatchInCaseNow
 
 # Resource Introspection Predicates
-@docs isUnknown, isNotUnknown, isPending, isNotPending, isUndecided, isNotUndecided, isForbidden, isNotForbidden, isVoid, isNotVoid, isNil, isNotNil, isKnown, isNotKnown, isOperation, isNotOperation
+@docs isUnknown, isNotUnknown, isPending, isNotPending, isUndecided, isNotUndecided, isForbidden, isNotForbidden, isVoid, isNotVoid, isNil, isNotNil, isKnown, isNotKnown, isOperation, isNotOperation, isGroup, isNotGroup
 
 # Manipulate and Use `ResourcePath`
 @docs prefixPath, atPath, putPath, getPath
