@@ -35,7 +35,7 @@ module Scaffold.Resource
   ResourceRef,
   ResourcePath,
 
-  userTask, deltaTask,
+  userTask, deltaTask, toProgramTask,
 
   defResource, forbiddenResource, pendingResource, undecidedResource,
   unknownResource, voidResource, operationResource, groupResource,
@@ -110,7 +110,7 @@ to their respective older counterparts.
 @docs decideBy, flatten, collapse, throughout, throughoutNow, therefore, within
 
 # Handling `UserTask` and `ResourceTask`
-@docs userTask, deltaTask, comprehend, interpret, routeTo, catchError
+@docs userTask, deltaTask, toProgramTask, comprehend, interpret, routeTo, catchError
 
 # Conditional Operations
 @docs dispatchIf, dispatchIfNot, dispatchInCase, dispatchInCaseNow
@@ -392,6 +392,14 @@ deltaTask optask =
   optask
     `andThen` (\{resource, path} -> prefixPath path resource |> Task.succeed)
     `onError` (\(path', err') -> undecidedResource err' |> prefixPath path' |> Task.succeed)
+
+
+{-| Convert a `UserTask euser v` in to an `App.ProgramTask bad a` -}
+toProgramTask : (Error.Error euser -> List a) -> (Resource euser v -> List a) -> UserTask euser v -> App.ProgramTask bad a
+toProgramTask errorActions resourceActions =
+  App.programAgent
+    (resourceActions >> App.programAgentSuccess)
+    (errorActions >> App.programAgentSuccess)
 
 
 {-| The equivalent of therefore for ResourceTasks. This allows you to map fetched data to multiple

@@ -23,12 +23,15 @@ type alias TreeItem = (String, String)
 
 -- Our action type.
 type Action =
-  Delta (Resource () TreeItem)
-  | Dispatch (UserTask () TreeItem)
+  Delta ModelResource
 
 
 type alias ModelResource =
   Resource () TreeItem
+
+
+type alias ModelDeltaTask =
+  UserTask () TreeItem
 
 
 type alias ViewResource =
@@ -92,6 +95,7 @@ defaultRenderContext =
     }
 
 
+resources0 : ModelResource
 resources0 =
   Resource.groupResource
     [ ("foo", Resource.defResource "foo value")
@@ -168,7 +172,6 @@ renderGroup renderContext address rpath resources =
       (renderContext, address, rpath, resources)
 
 
-
 -- render a ViewResource recursively. If the given ViewResource is a group, it is reduced to
 -- defined HTML, and if void or pending, it is rendered using special placeholders (currently not
 -- a lot of effort in to what they look like at all). `otherwise` is used with the special renderBad
@@ -190,20 +193,17 @@ render renderContext address rpath res = res
   >> Resource.otherwise (HL.lazy3 renderBad renderContext.badStyle address res)
 
 
--- viewTransform is applied to the deltas of the ModelResource to get appropriate deltas for the
+-- modelView is applied to the deltas of the ModelResource to get appropriate deltas for the
 -- ViewResource.
-viewTransform : RenderContext -> Signal.Address (List Action) -> List String -> ModelResource -> ViewResource
-viewTransform renderContext address rpath res =
+modelView : RenderContext -> Signal.Address (List Action) -> List String -> ModelResource -> ViewResource
+modelView renderContext address rpath res =
   Resource.therefore (HL.lazy3 renderItem renderContext.knownStyle address) res
 
 
--- Present the model.
+-- Present the current view output.
 present : Signal.Address (List Action) -> Time -> Model -> App.ViewOutput Action Html ()
 present address now model =
-  renderModelResource model.renderContext address now model.resources
-
-  |> App.presented
-  |> App.withChildren [ ]
+  App.presented model.output
 
 
 -- collapse : (comparable -> Resource euser v -> v -> Resource euser v) -> v -> Resource euser v -> Resource euser v
@@ -211,17 +211,27 @@ present address now model =
 -- Update the model. Nothing unfamiliar here.
 stage : Signal.Address (List Action) -> Time -> Model -> App.UpdatedModel Action Model ()
 stage address now model =
-  Resource. model.resources
-
-
   let
-    foldHtml key res ls =
-      renderModelResource renderContext address now
+    -- Transform the changes to the model to a view delta using our modelView function
+    dviews =
+      Resource.deltaTo (modelView model.renderContext address [ ]) model.resources
 
-    renderHtml
+    -- Update the view structure with the delta we got.
+    views' =
+      Resource.update dviews model.views
+
+    -- Render the new view. Html.Lazy ensures that the recursion stops where the view tree structure
+    -- has not changed, so we only create new VirtualDOM the _fingers of the changes to the tree_.
+    foutput _ v' =
+      render model.renderContext address [ ] v'
+
   in
-    Resource.throughout (renderModelResource renderContext address >> Resource.defResource) res
-    |> Resource.collapse foldHtmlLists []
+    { model
+    | views = views',
+    , output = HL.lazy2 foutput (model.renderContext, address, [ ]) views'
+    }
+
+    |> App.presented
 
 
 
@@ -229,6 +239,9 @@ stage address now model =
 update : Action -> Time -> ModelResource -> App.UpdatedModel Action ModelResource ()
 update action now model =
   case action of
+    Delta dres ->
+      (Delta >> flip (::) [])
+
     NoOp -> App.updated model
 
 
