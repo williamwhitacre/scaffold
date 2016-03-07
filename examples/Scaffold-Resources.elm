@@ -111,31 +111,40 @@ renderBad styleAttrib address res =
   HL.lazy2 Html.div [ styleAttrib ] [ HL.lazy Html.text ((++) "Unexpected Resource Tag :: " <| toString res) ]
 
 
-render : RenderContext -> Signal.Address (List Action) -> ModelResource -> 
-
-renderGroup : RenderContext -> Signal.Address (List Action) -> ModelResource -> Html
-renderGroup renderContext address res =
-  Resource.flatten
+--flatten : (List (String, Resource euser v) -> Resource euser v) -> Resource euser v -> Resource euser v
 
 
--- remember that ModelResource = Resource () TreeItem
-renderLeaf : RenderContext -> Signal.Address (List Action) -> ModelResource -> Html
-renderLeaf renderContext address res =
+flatten
+
+
+render : RenderContext -> Signal.Address (List Action) -> List String -> (ModelResource -> ViewResource)
+render renderContext address rpath res =
   Resource.therefore (HL.lazy3 renderItem renderContext.knownStyle address) res
+  |> Resource.throughoutNow
+    (Resource.assumeIfNow Resource.isGroup
+      (HL.lazy3 renderGroup renderContext address res)
 
-  |> Resource.assumeInCaseNow
-      (\res' -> if isGroup res' then renderGroup renderContext address res' )
-
-  -- replace me with a control.
-  |> Resource.assumeIfNow Resource.isVoid
+    -- replace me with a control.
+    >> Resource.assumeIfNow Resource.isVoid
       (HL.lazy3 renderItem renderContext.voidStyle address (key, "Nothing here!"))
 
-  -- replace me with a better indicator
-  |> Resource.assumeIfNow Resource.isPending
+    -- replace me with a better indicator
+    >> Resource.assumeIfNow Resource.isPending
       (HL.lazy3 renderItem renderContext.pendingStyle address (key, "Please wait..."))
 
-  -- in any other case, simply use the renderBad function.
-  |> Resource.otherwise (HL.lazy3 renderBad renderContext.badStyle address res)
+    -- in any other case, simply use the renderBad function.
+    >> Resource.otherwise (HL.lazy3 renderBad renderContext.badStyle address res))
+
+
+renderGroup : RenderContext -> Signal.Address (List Action) -> List String -> ModelResource -> Html
+renderGroup renderContext address rpath res =
+  let
+    -- (List (String, Resource euser v) -> Resource euser v)
+    groupHtml resources =
+      resources
+
+  in
+    Resource.flatten
 
 
 -- Present the model.

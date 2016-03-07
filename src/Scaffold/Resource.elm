@@ -43,12 +43,12 @@ module Scaffold.Resource
   maybeOr, resultOr,
 
   assumeIf, assumeIfNot, assumeIfNow, assumeInCase, assumeInCaseNow,
-  decideBy, maybeKnownNow,
+  dispatchIf, dispatchIfNot, dispatchInCase, dispatchInCaseNow,
+  deriveIf, deriveIfNow, decideBy, maybeKnownNow,
 
   comprehend, interpret, routeTo, catchError,
   collapse, flatten, throughout, throughoutNow, therefore, within, otherwise,
 
-  dispatchIf, dispatchIfNot, dispatchInCase, dispatchInCaseNow,
 
   isUnknown, isNotUnknown,
   isPending, isNotPending,
@@ -93,6 +93,15 @@ module Scaffold.Resource
 
 # Conditional Assumptions
 @docs assumeIf, assumeIfNot, assumeIfNow, assumeInCase, assumeInCaseNow
+
+# Conditional Derivations
+
+`deriveIf` and `deriveIfNow` are given as more flexible and readable versions of `assumeInCase`
+and `assumeInCaseNow`. Neither muddies the waters with the Maybe type, and the transformation
+can be any `Resource euser v -> Resource euser v`, which makes these highly nestable by comparison
+to their respective older counterparts.
+
+@docs deriveIf, deriveIfNow
 
 # Resource Output
 @docs otherwise, maybeKnownNow
@@ -435,13 +444,13 @@ collapse_ frecurse rpath res =
 `collapse`, this function does not recursively collapse the entire tree automatically. This grants
 a greater degree of flexibility.  -}
 flatten : (List (String, Resource euser v) -> Resource euser v) -> Resource euser v -> Resource euser v
-flatten fone res =
+flatten fgrp res =
   let
     cfold key res ls = (key, res) :: ls
 
   in
     case res of
-      Group stct -> groupStructFoldr_ cfold [] stct |> fone
+      Group stct -> groupStructFoldr_ cfold [] stct |> fgrp
       _ -> res
 
 
@@ -646,10 +655,10 @@ assumeIfNot satisfies assume res =
   assumeIf (satisfies >> not) assume res
 
 
-{-| If `possibleAssumption` yields some value `value'` when a Resource is applied, then
-that value is used to overwrite the resource with an assumption `Known value'`, otherwise the
-Resource is unaffected. If this resource is an operation, then the assumption will be applied
-conditionally to the result of that operation. -}
+{-| If `possibleAssumption` yields some value `value'` when a Resource is applied, then that
+value is used to overwrite the resource with an assumption `Known value'`, otherwise the Resource
+is unaffected. If this resource is an operation, then the assumption will be applied conditionally
+to the result of that operation. -}
 assumeInCase : (Resource euser v -> Maybe v) -> Resource euser v -> Resource euser v
 assumeInCase possibleAssumption res =
   case res of
@@ -697,6 +706,25 @@ dispatchInCase possibleOperation res =
     _ ->
       Maybe.map operationResource (possibleOperation res)
       |> Maybe.withDefault res
+
+
+{-| If the predicate is satisfied, apply the given transformation function. If this is a pending
+operationResource, then apply deriveIf with the same arguments to the result. -}
+deriveIf : (Resource euser v' -> Bool) -> (Resource euser v' -> Resource euser v') -> Resource euser v' -> Resource euser v'
+deriveIf satisfies f res =
+  case res of
+    Operation optask ->
+      Operation (optask
+        `andThen` (\ref -> { ref | resource = deriveIf satisfies f ref.resource } |> Task.succeed))
+
+    _ ->
+      deriveIfNow satisfies f res
+
+
+{-| If the predicate is satisfied, apply the given transformation function. -}
+deriveIfNow : (Resource euser v' -> Bool) -> (Resource euser v' -> Resource euser v') -> Resource euser v' -> Resource euser v'
+deriveIfNow satisfies f res' =
+  if satisfies res' then f res' else res'
 
 
 -- NOTE : These primitives force a reduction now even for an optask operation type
