@@ -182,12 +182,12 @@ render renderContext address rpath res = res
       (Resource.flattenDict (renderGroup renderContext address rpath) >> Resource.defResource)
 
   -- replace me with a control.
-  >> Resource.assumeIfNow Resource.isVoid
-      (HL.lazy3 renderItem renderContext.voidStyle address (key, "Nothing here!"))
+  >> Resource.deriveIfNow Resource.isVoid
+      (HL.lazy3 renderItem renderContext.voidStyle address ("", "Nothing here!"))
 
   -- replace me with a better indicator
   >> Resource.assumeIfNow Resource.isPending
-      (HL.lazy3 renderItem renderContext.pendingStyle address (key, "Please wait..."))
+      (HL.lazy3 renderItem renderContext.pendingStyle address ("", "Please wait..."))
 
   -- in any other case, simply use the renderBad function.
   >> Resource.otherwise (HL.lazy3 renderBad renderContext.badStyle address res)
@@ -209,12 +209,19 @@ present address now model =
 -- collapse : (comparable -> Resource euser v -> v -> Resource euser v) -> v -> Resource euser v -> Resource euser v
 
 -- Update the model. Nothing unfamiliar here.
+-- TODO : Add dispatch phase
 stage : Signal.Address (List Action) -> Time -> Model -> App.UpdatedModel Action Model ()
 stage address now model =
   let
+    dres =
+      Resource.deltaOf model.resources
+
+    resources' =
+      Resource.update dres model.resources
+
     -- Transform the changes to the model to a view delta using our modelView function
     dviews =
-      Resource.deltaTo (modelView model.renderContext address [ ]) model.resources
+      modelView model.renderContext address [ ] dres
 
     -- Update the view structure with the delta we got.
     views' =
@@ -225,9 +232,12 @@ stage address now model =
     foutput _ v' =
       render model.renderContext address [ ] v'
 
+    -- Resource.dispatch resources'
+    -- |> List.map deltaTask
   in
     { model
-    | views = views',
+    | resources = Resource.integrate resources'
+    , views = views'
     , output = HL.lazy2 foutput (model.renderContext, address, [ ]) views'
     }
 
@@ -240,17 +250,31 @@ update : Action -> Time -> ModelResource -> App.UpdatedModel Action ModelResourc
 update action now model =
   case action of
     Delta dres ->
-      (Delta >> flip (::) [])
+      { model
+      | resources = Resource.update dres model.resources
+      }
 
-    NoOp -> App.updated model
+      |> App.updated
 
+
+-- toProgramTask : (Error.Error euser -> List a) -> (Resource euser v -> List a) -> UserTask euser v -> ProgramTask bad a
+
+-- NOTE: Scaffold.App programs will execute all of the actions implied by it's initial inputs at startup, so
+-- it is not neccessary to compute an initial model with the starting metrics for your view. Internally this is
+-- done quite easily by using `Signal.Extra.foldp'` as the main engine of `App.run*` instead of `Signal.foldp`.
+-- This step is neccessary because the initial values of signals do not produce any events so they will not be
+-- immediately translated in to actions.
 
 -- Set up the program.
 output : App.ProgramOutput Action ModelResource Html ()
 output =
-  App.defProgram' present stage update model0 -- Define your top level program.
-  |> App.run     -- Invoke the configured ProgramInput to get a ProgramOutput
-  |> App.itself  -- Wire task output back in.
+  App.defProgram' present stage update model0   -- Assemble the ProgramInput functions
+  |> App.withSequenceInputs [] -- We will fill this out in the next example as more sophisticated
+                               -- layout begins to take place. We will need to pipe in the client
+                               -- size.
+
+  |> App.runAnd (Task.succeed [ Delta resources0 ]) -- Dispatch an inital task.
+  |> App.itself -- Pipe the results of outgoing tasks back in.
 
 
 main : Signal Html

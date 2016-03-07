@@ -47,7 +47,7 @@ module Scaffold.Resource
   deriveIf, deriveIfNow, decideBy, maybeKnownNow,
 
   comprehend, interpret, routeTo, catchError,
-  collapse, flatten, throughout, throughoutNow, therefore, within, otherwise,
+  collapse, flatten, flattenDict, throughout, throughoutNow, therefore, within, otherwise,
 
 
   isUnknown, isNotUnknown,
@@ -107,7 +107,7 @@ to their respective older counterparts.
 @docs otherwise, maybeKnownNow
 
 # Bulk Operations
-@docs decideBy, flatten, collapse, throughout, throughoutNow, therefore, within
+@docs decideBy, flatten, flattenDict, collapse, throughout, throughoutNow, therefore, within
 
 # Handling `UserTask` and `ResourceTask`
 @docs userTask, deltaTask, toProgramTask, comprehend, interpret, routeTo, catchError
