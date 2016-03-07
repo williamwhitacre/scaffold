@@ -14,8 +14,11 @@ import Html.Lazy as HL
 import Signal
 import Task exposing (Task)
 
+import Dict exposing (Dict)
 
 import Time exposing (Time)
+
+import String
 
 
 type alias TreeItem = (String, String)
@@ -102,8 +105,8 @@ resources0 =
     , ("bar", Resource.defResource "bar value")
     , ( "baz"
       , Resource.groupResource
-          [ ("child1", "first baz child")
-          , ("child2", "second baz child")
+          [ ("child1", Resource.defResource "first baz child")
+          , ("child2", Resource.defResource "second baz child")
           ]
       )
     , ("fuq", Resource.defResource "fuq value")
@@ -125,7 +128,7 @@ renderItem : Html.Attribute -> Signal.Address (List Action) -> TreeItem -> Html
 renderItem styleAttrib address (key, datum) =
   Html.div
     [ styleAttrib ]                                          -- attribs
-    [ Html.text "\"" ++ key ++ "\" => \"" ++ datum ++ "\"" ] -- html items
+    [ Html.text ("\"" ++ key ++ "\" => \"" ++ datum ++ "\"") ] -- html items
 
 
 -- TODO: improve error output!
