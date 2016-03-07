@@ -454,6 +454,19 @@ flatten fgrp res =
       _ -> res
 
 
+{-| Variant of `flatten` whose argument function takes a dictionary instead of a list of pairs. -}
+flattenDict : (Dict String (Resource euser v) -> Resource euser v) -> Resource euser v -> Resource euser v
+flattenDict fgrp res =
+  case res of
+    Group stct ->
+      stct
+      |> groupStructChanged_
+      |> .curr
+      |> fgrp
+
+    _ -> res
+
+
 {-| Use the given function to transform all leaf resources throughout a group structure. This
 applies to the result of any pending resource operations. -}
 throughout : (Resource euser v -> Resource euser v) -> Resource euser v -> Resource euser v
@@ -769,7 +782,8 @@ dispatchInCaseNow possibleOperation res =
       |> Maybe.withDefault res
 
 
-{-|  -}
+{-| In the event that the given resource is not a simple `defResource`, we replace it with a different simple
+resource. -}
 otherwise : v' -> Resource euser v' -> v'
 otherwise assumption res' =
   case res' of
