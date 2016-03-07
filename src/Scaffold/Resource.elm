@@ -395,11 +395,11 @@ deltaTask optask =
 
 
 {-| Convert a `UserTask euser v` in to an `App.ProgramTask bad a` -}
-toProgramTask : (Error.Error euser -> List a) -> (Resource euser v -> List a) -> UserTask euser v -> App.ProgramTask bad a
+toProgramTask : (Error.Error euser -> List a) -> (Resource euser v -> List a) -> UserTask euser v -> ProgramTask bad a
 toProgramTask errorActions resourceActions =
-  App.programAgent
-    (resourceActions >> App.programAgentSuccess)
-    (errorActions >> App.programAgentSuccess)
+  programAgent
+    (resourceActions >> programAgentSuccess)
+    (errorActions >> programAgentSuccess)
 
 
 {-| The equivalent of therefore for ResourceTasks. This allows you to map fetched data to multiple
