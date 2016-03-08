@@ -604,6 +604,17 @@ merge choice left' right' =
 
       |> Group
 
+    (Group lhs, _) ->
+      Dict.foldl
+        (\key res' rhs' ->
+          groupGet_ key rhs'
+          |> \res -> groupPut_ key (merge choice res' res) rhs'
+        )
+        groupNew_
+        (groupStructChanged_ lhs |> .curr)
+
+      |> Group
+
     (_, _) -> choice left' right'
 
   {-let
