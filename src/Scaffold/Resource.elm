@@ -592,7 +592,7 @@ automatically with eachother. -}
 merge : (Resource euser v -> Resource euser v -> Resource euser v) -> Resource euser v -> Resource euser v -> Resource euser v
 merge choice left' right' =
   -- right' is the current group, left' is what's being merged in.
-  case (left', right') of
+  case (Debug.log "MERGE LEFT SIDE" left', Debug.log "MERGE RIGHT SIDE" right') of
     (Group lhs, Group rhs) ->
       Dict.foldl
         (\key res' rhs' ->
@@ -603,6 +603,9 @@ merge choice left' right' =
         (groupStructChanged_ lhs |> .curr)
 
       |> Group
+
+    (Group lhs, old) ->
+      choice (Group { curr = Dict.empty, chgs = groupStructChanged_ lhs |> .curr }) old
 
     (_, _) -> choice left' right'
 
