@@ -591,23 +591,38 @@ existing at the same path, _at least one of which is concrete and not a group_. 
 automatically with eachother. -}
 merge : (Resource euser v -> Resource euser v -> Resource euser v) -> Resource euser v -> Resource euser v -> Resource euser v
 merge choice left' right' =
-  let
+  -- right' is the current group, left' is what's being merged in.
+  case (left', right') of
+    (Group lhs, Group rhs) ->
+      Dict.foldl
+        (\key res' rhs' ->
+          groupGet_ key rhs'
+          |> \res -> groupPut_ key (merge choice res' res) rhs'
+        )
+        rhs
+        (groupStructChanged_ lhs |> .curr)
+
+      |> Group
+
+    (_, _) -> choice left' right'
+
+  {-let
     groupMerge_ lhs rhs =
       let
-        (rhsTail, isectDict) = Dict.partition
-          (\key _ -> groupGet_ key lhs |> isUnknown)
-          (groupStructChanged_ rhs |> .curr)
+        (lhsTail, isectDict) = Dict.partition
+          (\key _ -> groupGet_ key rhs |> isUnknown)
+          (groupStructChanged_ lhs |> .curr)
 
       in
         Dict.foldl
-          (\key rhv lhs' -> merge choice (groupGet_ key lhs') rhv |> flip (groupPut_ key) lhs')
-          { lhs | chgs = Dict.union rhsTail lhs.chgs }
+          (\key lhv rhs' -> merge choice lhv (groupGet_ key rhs') |> groupPut_ key lhv)
+          { rhs | chgs = Dict.union lhsTail rhs.chgs }
           isectDict
 
   in
     case (left', right') of
       (Group leftStct, Group rightStct) -> Group (groupMerge_ leftStct rightStct)
-      (_, _) -> choice left' right'
+      (_, _) -> choice left' right'-}
 
 
 {-| Merge many folds from the left over the given list of resources with merge. -}

@@ -213,24 +213,21 @@ stage : Signal.Address (List Action) -> Time -> Model -> App.UpdatedModel Action
 stage address now model =
   let
     dres =
-      Resource.deltaOf model.resources
-
-    resources' =
-      Resource.update dres model.resources
+      Debug.log "resource delta" (Resource.deltaOf (Debug.log "resources" model.resources))
 
     -- Transform the changes to the model to a view delta using our modelView function
     dviews =
-      modelView model.renderContext address [ ] dres
+      Debug.log "view delta" (modelView model.renderContext address [ ] dres)
 
     -- Update the view structure with the delta we got.
     views' =
-      Resource.update dviews model.views
+      Debug.log "views'" (Resource.update dviews model.views)
 
     -- Resource.dispatch resources'
     -- |> List.map deltaTask
   in
     { model
-    | resources = Resource.integrate resources'
+    | resources = Resource.integrate model.resources
     , views = views'
     , output = render model.renderContext address [ ] views'
     }
@@ -245,7 +242,7 @@ update action now model =
   case action of
     Delta dres ->
       { model
-      | resources = Resource.update dres model.resources
+      | resources = Debug.log "updated resources" (Resource.update (Debug.log "applying delta" dres) model.resources)
       }
 
       |> App.updated
