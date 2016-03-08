@@ -603,6 +603,7 @@ merge choice left' right' =
         (groupStructChanged_ lhs |> .curr)
 
       |> Group
+      |> Debug.log "MERGE RESULT"
 
     (Group lhs, old) ->
       choice (Group { curr = Dict.empty, chgs = groupStructChanged_ lhs |> .curr }) old
