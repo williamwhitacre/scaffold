@@ -1,4 +1,4 @@
-{- Boilerplate for getting started using Scaffold.App -}
+{- Example using Resource for mapping data to views recursively. -}
 
 import Scaffold.App as App
 import Scaffold.Machine as Machine exposing (Machine)
@@ -135,7 +135,7 @@ renderBad : Html.Attribute -> Signal.Address (List Action) -> ViewResource -> Ht
 renderBad styleAttrib address res =
   Html.div
     [ styleAttrib ]
-    [ Html.text ((++) "Unexpected Resource Tag :: " <| toString res) ]
+    [ Html.text "Unexpected Resource Tag!!!" ]
 
 
 -- argument given to `Resource.flattenDict` for reducing a `ViewResource` in to a single Html element.
@@ -213,15 +213,15 @@ stage : Signal.Address (List Action) -> Time -> Model -> App.UpdatedModel Action
 stage address now model =
   let
     dres =
-      Debug.log "resource delta" (Resource.deltaOf (Debug.log "resources" model.resources))
+      Resource.deltaOf model.resources
 
     -- Transform the changes to the model to a view delta using our modelView function
     dviews =
-      Debug.log "view delta" (modelView model.renderContext address [ ] dres)
+      modelView model.renderContext address [ ] dres
 
     -- Update the view structure with the delta we got.
     views' =
-      Debug.log "views'" (Resource.update dviews model.views)
+      Resource.update dviews model.views
 
     -- Resource.dispatch resources'
     -- |> List.map deltaTask
@@ -242,7 +242,7 @@ update action now model =
   case action of
     Delta dres ->
       { model
-      | resources = Debug.log "updated resources" (Resource.update (Debug.log "applying delta" dres) model.resources)
+      | resources = Resource.update dres model.resources
       }
 
       |> App.updated

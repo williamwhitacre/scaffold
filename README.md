@@ -2,9 +2,12 @@
 
 ## Use this.
 
-#### [Example 1 - Boilerplate](https://github.com/williamwhitacre/scaffold/blob/master/examples/Scaffold-Boilerplate.elm)
-#### [Example 2 - Dynamic Counter](https://github.com/williamwhitacre/scaffold/blob/master/examples/Scaffold-DynamicCounter.elm)
-#### [Example 3 - Resources](https://github.com/williamwhitacre/scaffold/blob/master/examples/Scaffold-Resources.elm) -- ___Note___ **that this example is not complete, but will be working fully by the end of Monday (7 Mar 2016).**
+1. [Example - Boilerplate](https://github.com/williamwhitacre/scaffold/blob/master/examples/Scaffold-Boilerplate.elm)
+2. [Example - Dynamic Counter](https://github.com/williamwhitacre/scaffold/blob/master/examples/Scaffold-DynamicCounter.elm)
+3. [Example - Resources](https://github.com/williamwhitacre/scaffold/blob/master/examples/Scaffold-Resources.elm) Now working
+
+Note that Example 3 shows a fully working recursive transformation from data to view using `Resource`, and with delta updates to
+the view structure using `Resource.deltaOf` and the `stage` function from `App` in conjunction. Enjoy! :)
 
 
 ## This is not an alternative architecture.
@@ -16,7 +19,7 @@ This scaffolding is intended to provide a set of very useful types and DSL libra
 
 The remainder of `README.md` is relevant because is has a (probably typo ridden) explanation of some of the rationale. It is not however complete or reviewed thoroughly for correctness at the time of this writing (6 Mar 2016). Significant work will be put in to updating the package overall.
 
-Again, [Example 1 - Boilerplate](https://github.com/williamwhitacre/scaffold/blob/master/examples/Scaffold-Boilerplate.elm) and [Example 2 - Dynamic Counter](https://github.com/williamwhitacre/scaffold/blob/master/examples/Scaffold-DynamicCounter.elm) are *definitely* the best place to play with some working code at the moment. I will update this again immediately following completion of *Example 3*.
+Again, [Example 1 - Boilerplate](https://github.com/williamwhitacre/scaffold/blob/master/examples/Scaffold-Boilerplate.elm), [Example 2 - Dynamic Counter](https://github.com/williamwhitacre/scaffold/blob/master/examples/Scaffold-DynamicCounter.elm), and [Example 3 - Resources](https://github.com/williamwhitacre/scaffold/blob/master/examples/Scaffold-Resources.elm) are *definitely* the best place to play with some working code at the moment.
 
 # What's available?
 
