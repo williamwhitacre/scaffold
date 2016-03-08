@@ -10,7 +10,6 @@ import Html.Events exposing (onClick)
 import Html.Attributes exposing (style)
 import Html.Lazy as HL
 
-
 import Signal
 import Task exposing (Task)
 
@@ -21,7 +20,7 @@ import Time exposing (Time)
 import String
 
 
-type alias TreeItem = (String, String)
+type alias TreeItem = String
 
 
 -- Our action type.
@@ -33,12 +32,12 @@ type alias ModelResource =
   Resource () TreeItem
 
 
-type alias ModelDeltaTask =
-  UserTask () TreeItem
-
-
 type alias ViewResource =
   Resource () Html
+
+
+type alias ModelDeltaTask =
+  UserTask () TreeItem
 
 
 type alias RenderContext =
@@ -89,7 +88,7 @@ pathText = List.foldr (\elem p -> ("/" ++ elem) ++ p) ""
 
 defaultRenderContext : RenderContext
 defaultRenderContext =
-  let doStyling = styleItem 12 "arial" in
+  let doStyling = styleItem 12 ["arial"] in
     { badStyle = doStyling True True
     , voidStyle = doStyling False True
     , pendingStyle = doStyling True False
@@ -118,25 +117,25 @@ model0 : Model
 model0 =
     { resources = Resource.pendingResource
     , views = Resource.pendingResource
-    , output = HL.lazy2 Html.h1 [] [Html.text "Please wait..."]
+    , output = Html.h1 [] [Html.text "Please wait..."]
     , renderContext = defaultRenderContext
     }
 
 
 -- TODO: add controls!
 renderItem : Html.Attribute -> Signal.Address (List Action) -> TreeItem -> Html
-renderItem styleAttrib address (key, datum) =
+renderItem styleAttrib address datum =
   Html.div
     [ styleAttrib ]                                          -- attribs
-    [ Html.text ("\"" ++ key ++ "\" => \"" ++ datum ++ "\"") ] -- html items
+    [ Html.text ("\"" ++ datum ++ "\"") ] -- html items
 
 
 -- TODO: improve error output!
-renderBad : Html.Attribute -> Signal.Address (List Action) -> ModelResource -> Html
+renderBad : Html.Attribute -> Signal.Address (List Action) -> ViewResource -> Html
 renderBad styleAttrib address res =
   Html.div
     [ styleAttrib ]
-    [ HL.lazy Html.text ((++) "Unexpected Resource Tag :: " <| toString res) ]
+    [ Html.text ((++) "Unexpected Resource Tag :: " <| toString res) ]
 
 
 -- argument given to `Resource.flattenDict` for reducing a `ViewResource` in to a single Html element.
@@ -144,35 +143,31 @@ renderBad styleAttrib address res =
 renderGroup : RenderContext -> Signal.Address (List Action) -> List String -> Dict String ViewResource -> Html
 renderGroup renderContext address rpath resources =
   let
-    htmlChildList =
+    htmlChildren =
       Dict.foldr
-        (\k r' htmlList ->
-          (HL.lazy3 (uncurry render) (renderContext, address) (k :: rpath) r') :: htmlList)
+        (\k r' htmlList -> (render renderContext address (k :: rpath) r') :: htmlList)
         []
-
-    htmlChildren (_, _, _, res) =
-      htmlChildList res
 
     htmlGroup =
       Html.div [ renderContext.groupStyle ]
 
     htmlContainer grouped =
       Html.div
-      [ Html.h4
-          [ styleItem 16 "arial" False True ]
-          [ Html.abbr
-              [ Html.Attributes.title (pathText rpath) ]
-              [ List.head rpath
-                |> Maybe.map (flip (++) "/")
-                |> Maybe.withDefault "/"
-              ]
-          ]
-      , grouped
-      ]
+        [ style [ ("display", "block") ] ]
+        [ Html.h4
+            [ styleItem 16 ["arial"] False True ]
+            [ Html.abbr
+                [ Html.Attributes.title (pathText rpath) ]
+                [ List.head rpath
+                  |> Maybe.map (flip (++) "/")
+                  |> Maybe.withDefault "/"
+                  |> Html.text
+                ]
+            ]
+        , grouped
+        ]
   in
-    HL.lazy
-      (htmlChildren >> htmlGroup >> htmlContainer)
-      (renderContext, address, rpath, resources)
+    resources |> htmlChildren >> htmlGroup >> htmlContainer
 
 
 -- render a ViewResource recursively. If the given ViewResource is a group, it is reduced to
@@ -180,27 +175,28 @@ renderGroup renderContext address rpath resources =
 -- a lot of effort in to what they look like at all). `otherwise` is used with the special renderBad
 -- function to reduce the final output to plain HTML.
 render : RenderContext -> Signal.Address (List Action) -> List String -> ViewResource -> Html
-render renderContext address rpath res = res
-  |> Resource.deriveIfNow Resource.isGroup
-      (Resource.flattenDict (renderGroup renderContext address rpath) >> Resource.defResource)
+render renderContext address rpath res =
+  res
 
-  -- replace me with a control.
-  >> Resource.deriveIfNow Resource.isVoid
-      (HL.lazy3 renderItem renderContext.voidStyle address ("", "Nothing here!"))
+  |> (Resource.flattenDict (renderGroup renderContext address rpath >> Resource.defResource)
+      -- replace me with a control.
+      >> Resource.assumeIfNow Resource.isVoid
+          (renderItem renderContext.voidStyle address "Nothing here!")
 
-  -- replace me with a better indicator
-  >> Resource.assumeIfNow Resource.isPending
-      (HL.lazy3 renderItem renderContext.pendingStyle address ("", "Please wait..."))
+      -- replace me with a better indicator
+      >> Resource.assumeIfNow Resource.isPending
+          (renderItem renderContext.pendingStyle address "Please wait...")
 
-  -- in any other case, simply use the renderBad function.
-  >> Resource.otherwise (HL.lazy3 renderBad renderContext.badStyle address res)
+      -- in any other case, simply use the renderBad function.
+      >> Resource.otherwise (renderBad renderContext.badStyle address res)
+    )
 
 
 -- modelView is applied to the deltas of the ModelResource to get appropriate deltas for the
 -- ViewResource.
 modelView : RenderContext -> Signal.Address (List Action) -> List String -> ModelResource -> ViewResource
 modelView renderContext address rpath res =
-  Resource.therefore (HL.lazy3 renderItem renderContext.knownStyle address) res
+  Resource.therefore (renderItem renderContext.knownStyle address) res
 
 
 -- Present the current view output.
@@ -230,26 +226,21 @@ stage address now model =
     views' =
       Resource.update dviews model.views
 
-    -- Render the new view. Html.Lazy ensures that the recursion stops where the view tree structure
-    -- has not changed, so we only create new VirtualDOM the _fingers of the changes to the tree_.
-    foutput _ v' =
-      render model.renderContext address [ ] v'
-
     -- Resource.dispatch resources'
     -- |> List.map deltaTask
   in
     { model
     | resources = Resource.integrate resources'
     , views = views'
-    , output = HL.lazy2 foutput (model.renderContext, address, [ ]) views'
+    , output = render model.renderContext address [ ] views'
     }
 
-    |> App.presented
+    |> App.updated
 
 
 
 -- Update the model. Nothing unfamiliar here.
-update : Action -> Time -> ModelResource -> App.UpdatedModel Action ModelResource ()
+update : Action -> Time -> Model -> App.UpdatedModel Action Model ()
 update action now model =
   case action of
     Delta dres ->
@@ -269,15 +260,21 @@ update action now model =
 -- immediately translated in to actions.
 
 -- Set up the program.
-output : App.ProgramOutput Action ModelResource Html ()
+output : App.ProgramOutput Action Model Html ()
 output =
-  App.defProgram' present stage update model0   -- Assemble the ProgramInput functions
-  |> App.withSequenceInputs [] -- We will fill this out in the next example as more sophisticated
-                               -- layout begins to take place. We will need to pipe in the client
-                               -- size.
+  -- Assemble the ProgramInput functions
+  App.defProgram' present stage update model0
 
-  |> App.runAnd (Task.succeed [ Delta resources0 ]) -- Dispatch an inital task.
-  |> App.itself -- Pipe the results of outgoing tasks back in.
+  -- We will fill this out in the next example as more sophisticated
+  -- layout begins to take place. We will need to pipe in the client
+  -- size.
+  |> App.defSequenceInputs []
+
+  -- Dispatch an inital task.
+  |> App.runAnd (App.actionTask [ Delta resources0 ])
+
+  -- Pipe the results of outgoing tasks back in.
+  |> App.itself
 
 
 main : Signal Html
