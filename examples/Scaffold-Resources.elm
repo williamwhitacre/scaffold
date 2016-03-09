@@ -20,12 +20,21 @@ import Time exposing (Time)
 import String
 
 
-type alias TreeItem = String
+type alias TreeItem =
+  { title : String
+  , editTitle : Maybe String
+  }
 
 
 -- Our action type.
 type Action =
   Delta ModelResource
+  | NewItem (List String)
+  | EditItem (List String)
+  | RevertItem (List String)
+  | ChangeItem (List String) String
+  | SaveItem (List String) String
+  | DeleteItem (List String)
 
 
 type alias ModelResource =
@@ -64,8 +73,8 @@ styleOut : Html.Attribute
 styleOut =
   style
     [ ("position", "absolute")
-    , ("top", "20px")
-    , ("left", "20px")
+    , ("top", "5px")
+    , ("left", "5px")
     , ("width", "660px")
     ]
 
@@ -97,18 +106,50 @@ defaultRenderContext =
     }
 
 
+makeItem : String -> TreeItem
+makeItem title =
+  { title = title
+  , editTitle = Nothing
+  }
+
+
+newItem : TreeItem
+newItem =
+  { title = ""
+  , editTitle = Just ""
+  }
+
+
+editItem : TreeItem -> TreeItem
+editItem item =
+  changeItem item.title item
+
+
+changeItem : String -> TreeItem -> TreeItem
+changeItem title' item =
+  { item | editTitle = Just title' }
+
+
+saveItem : TreeItem -> TreeItem
+saveItem item =
+  case item.editTitle of
+    Just title' -> { item | editTitle = Nothing, title = title' }
+    _ -> item
+
+
+revertItem : TreeItem -> TreeItem
+revertItem item =
+  case item.editTitle of
+    Just title' -> { item | editTitle = Nothing }
+    _ -> item
+
+
 resources0 : ModelResource
 resources0 =
   Resource.groupResource
-    [ ("foo", Resource.defResource "foo value")
-    , ("bar", Resource.defResource "bar value")
-    , ( "baz"
-      , Resource.groupResource
-          [ ("child1", Resource.defResource "first baz child")
-          , ("child2", Resource.defResource "second baz child")
-          ]
-      )
-    , ("fuq", Resource.defResource "fuq value")
+    [ ("foo", Resource.defResource (makeItem "foo value"))
+    , ("bar", Resource.defResource (makeItem "bar value"))
+    , ("fuq", Resource.defResource (makeItem "fuq value"))
     ]
 
 
@@ -123,11 +164,28 @@ model0 =
 
 
 -- TODO: add controls!
-renderItem : Html.Attribute -> Signal.Address (List Action) -> TreeItem -> Html
-renderItem styleAttrib address datum =
-  Html.div
-    [ styleAttrib ]                                          -- attribs
-    [ Html.text ("\"" ++ datum ++ "\"") ] -- html items
+renderItem : Html.Attribute -> Signal.Address (List Action) -> List String -> TreeItem -> Html
+renderItem styleAttrib address rpath item =
+  case item.editTitle of
+    Nothing ->
+      Html.div
+        [ styleAttrib ] -- attribs
+        [ Html.text ("Item \"" ++ item.title ++ "\".")
+        , Html.button [ Html.Events.onClick address (EditItem rpath) ] [ Html.text "Edit" ]
+        , Html.button [ Html.Events.onClick address (DeleteItem rpath) ] [ Html.text "Delete" ]
+        ] -- html items
+    Just title' ->
+      Html.div
+        [ styleAttrib ]
+        [ Html.input
+            [ Html.Attributes.placeholder "Enter Item Title"
+            , Html.Attributes.value title'
+            , Html.Events.on "input" Html.Events.targetValue (ChangeItem rpath >> Signal.message address)
+            ]
+            [ ]
+        , Html.button [ Html.Events.onClick address (RevertItem rpath) ] [ Html.text "Revert" ]
+        , Html.button [ Html.Events.onClick address (SaveItem rpath title') ] [ Html.text "Save" ]
+        ]
 
 
 -- TODO: improve error output!
@@ -148,8 +206,14 @@ renderGroup renderContext address rpath resources =
         (\k r' htmlList -> (render renderContext address (k :: rpath) r') :: htmlList)
         []
 
-    htmlGroup =
-      Html.div [ renderContext.groupStyle ]
+    htmlGroup children =
+      let
+        buttons =
+          [ Html.button [ Html.Events.onClick address (NewItem rpath) ] [ Html.text "New Item" ]
+          ]
+
+      in
+        Html.div [ renderContext.groupStyle ] (buttons ++ children)
 
     htmlContainer grouped =
       Html.div
@@ -181,11 +245,11 @@ render renderContext address rpath res =
   |> (Resource.flattenDict (renderGroup renderContext address rpath >> Resource.defResource)
       -- replace me with a control.
       >> Resource.assumeIfNow Resource.isVoid
-          (renderItem renderContext.voidStyle address "Nothing here!")
+          (Html.div [ renderContext.voidStyle ] [ "Nothing here!" ])
 
       -- replace me with a better indicator
       >> Resource.assumeIfNow Resource.isPending
-          (renderItem renderContext.pendingStyle address "Please wait...")
+          (Html.div [ renderContext.pendingStyle ] [ "Please wait!" ])
 
       -- in any other case, simply use the renderBad function.
       >> Resource.otherwise (renderBad renderContext.badStyle address res)
@@ -243,6 +307,57 @@ update action now model =
     Delta dres ->
       { model
       | resources = Resource.update dres model.resources
+      }
+
+      |> App.updated
+
+    NewItem rpath ->
+      { model
+      | resources = Resource.putPath Resource.chooseLeft
+          ("" :: rpath |> List.reverse) (Resource.defResource newItem) model.resources
+      }
+
+      |> App.updated
+
+
+    EditItem rpath ->
+      { model
+      | resources =
+          Resource.atPath (Resource.therefore editItem) (List.reverse rpath) model.resources
+      }
+
+      |> App.updated
+
+
+    RevertItem rpath ->
+      { model
+      | resources =
+          Resource.atPath (Resource.therefore revertItem) (List.reverse rpath) model.resources
+      }
+
+      |> App.updated
+
+    ChangeItem rpath title' ->
+      { model
+      | resources =
+          Resource.atPath (Resource.therefore <| changeItem title') (List.reverse rpath) model.resources
+      }
+
+      |> App.updated
+
+    SaveItem rpath title' ->
+      { model
+      | resources =
+          Resource.atPath (Resource.therefore <| saveItem title') (List.reverse rpath) model.resources
+      }
+
+      |> App.updated
+
+    DeleteItem rpath ->
+      { model
+      | resources =
+          Resource.putPath Resource.chooseLeft
+          (List.reverse rpath) Resource.unknownResource model.resources
       }
 
       |> App.updated

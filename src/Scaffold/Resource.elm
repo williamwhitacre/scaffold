@@ -547,7 +547,7 @@ atPath operation path res =
 putPath : (Resource euser v -> Resource euser v -> Resource euser v) -> List String -> Resource euser v -> Resource euser v -> Resource euser v
 putPath choice path res' res =
   prefixPath path res'
-  |> merge choice res
+  |> \res'' -> merge choice res'' res
 
 
 {-| Collision handler for nested Resources that always chooses the left hand side. -}
