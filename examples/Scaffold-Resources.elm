@@ -360,6 +360,9 @@ update action now model =
 
         |> App.updated
 
+    SaveItem [] _ ->
+      App.updated model
+
     DeleteItem rpath ->
       { model
       | resources =
