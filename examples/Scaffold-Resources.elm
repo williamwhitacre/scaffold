@@ -146,11 +146,14 @@ revertItem item =
 
 resources0 : ModelResource
 resources0 =
+  Resource.groupResource []
+  {-
   Resource.groupResource
     [ ("foo", Resource.defResource (makeItem "foo value"))
     , ("bar", Resource.defResource (makeItem "bar value"))
     , ("fuq", Resource.defResource (makeItem "fuq value"))
     ]
+  -}
 
 
 -- Initial model.
@@ -166,13 +169,14 @@ model0 =
 -- TODO: add controls!
 renderItem : Html.Attribute -> Signal.Address (List Action) -> List String -> TreeItem -> Html
 renderItem styleAttrib address rpath item =
-  case item.editTitle of
+  Debug.log "render item at" (List.reverse rpath)
+  |> \_ -> case item.editTitle of
     Nothing ->
       Html.div
         [ styleAttrib ] -- attribs
         [ Html.text ("Item \"" ++ item.title ++ "\".")
-        , Html.button [ Html.Events.onClick address (EditItem rpath) ] [ Html.text "Edit" ]
-        , Html.button [ Html.Events.onClick address (DeleteItem rpath) ] [ Html.text "Delete" ]
+        , Html.button [ Html.Events.onClick address [ EditItem rpath ] ] [ Html.text "Edit" ]
+        , Html.button [ Html.Events.onClick address [ DeleteItem rpath ] ] [ Html.text "Delete" ]
         ] -- html items
     Just title' ->
       Html.div
@@ -180,11 +184,11 @@ renderItem styleAttrib address rpath item =
         [ Html.input
             [ Html.Attributes.placeholder "Enter Item Title"
             , Html.Attributes.value title'
-            , Html.Events.on "input" Html.Events.targetValue (ChangeItem rpath >> Signal.message address)
+            , Html.Events.on "input" Html.Events.targetValue (ChangeItem rpath >> flip (::) [ ] >> Signal.message address)
             ]
             [ ]
-        , Html.button [ Html.Events.onClick address (RevertItem rpath) ] [ Html.text "Revert" ]
-        , Html.button [ Html.Events.onClick address (SaveItem rpath title') ] [ Html.text "Save" ]
+        , Html.button [ Html.Events.onClick address [ RevertItem rpath ] ] [ Html.text "Revert" ]
+        , Html.button [ Html.Events.onClick address [ SaveItem rpath title' ] ] [ Html.text "Save" ]
         ]
 
 
@@ -203,13 +207,13 @@ renderGroup renderContext address rpath resources =
   let
     htmlChildren =
       Dict.foldr
-        (\k r' htmlList -> (render renderContext address (k :: rpath) r') :: htmlList)
+        (\k r' htmlList -> (render renderContext address (Debug.log "render child" <| k :: rpath) r') :: htmlList)
         []
 
     htmlGroup children =
       let
         buttons =
-          [ Html.button [ Html.Events.onClick address (NewItem rpath) ] [ Html.text "New Item" ]
+          [ Html.button [ Html.Events.onClick address [ NewItem rpath ] ] [ Html.text "New Item" ]
           ]
 
       in
@@ -242,14 +246,14 @@ render : RenderContext -> Signal.Address (List Action) -> List String -> ViewRes
 render renderContext address rpath res =
   res
 
-  |> (Resource.flattenDict (renderGroup renderContext address rpath >> Resource.defResource)
+  |> (Resource.flattenDict (renderGroup renderContext address (Debug.log "render at path" rpath) >> Resource.defResource)
       -- replace me with a control.
       >> Resource.assumeIfNow Resource.isVoid
-          (Html.div [ renderContext.voidStyle ] [ "Nothing here!" ])
+          (Html.div [ renderContext.voidStyle ] [ Html.text "Nothing here!" ])
 
       -- replace me with a better indicator
       >> Resource.assumeIfNow Resource.isPending
-          (Html.div [ renderContext.pendingStyle ] [ "Please wait!" ])
+          (Html.div [ renderContext.pendingStyle ] [ Html.text "Please wait!" ])
 
       -- in any other case, simply use the renderBad function.
       >> Resource.otherwise (renderBad renderContext.badStyle address res)
@@ -260,7 +264,8 @@ render renderContext address rpath res =
 -- ViewResource.
 modelView : RenderContext -> Signal.Address (List Action) -> List String -> ModelResource -> ViewResource
 modelView renderContext address rpath res =
-  Resource.therefore (renderItem renderContext.knownStyle address) res
+  -- MARK TODO root path propagated to all concrete items during rendering blindly.
+  Resource.therefore (renderItem renderContext.knownStyle address rpath) res
 
 
 -- Present the current view output.
@@ -323,7 +328,7 @@ update action now model =
     EditItem rpath ->
       { model
       | resources =
-          Resource.atPath (Resource.therefore editItem) (List.reverse rpath) model.resources
+          Resource.atPath (Resource.therefore editItem) (Debug.log "EditItem path is" <| List.reverse rpath) model.resources
       }
 
       |> App.updated
@@ -332,7 +337,7 @@ update action now model =
     RevertItem rpath ->
       { model
       | resources =
-          Resource.atPath (Resource.therefore revertItem) (List.reverse rpath) model.resources
+          Resource.atPath (Resource.therefore revertItem) (Debug.log "RevertItem path is" <| List.reverse rpath) model.resources
       }
 
       |> App.updated
@@ -340,7 +345,7 @@ update action now model =
     ChangeItem rpath title' ->
       { model
       | resources =
-          Resource.atPath (Resource.therefore <| changeItem title') (List.reverse rpath) model.resources
+          Resource.atPath (Resource.therefore <| changeItem title') (Debug.log "ChangeItem path is" <| List.reverse rpath) model.resources
       }
 
       |> App.updated
@@ -348,7 +353,7 @@ update action now model =
     SaveItem rpath title' ->
       { model
       | resources =
-          Resource.atPath (Resource.therefore <| saveItem title') (List.reverse rpath) model.resources
+          Resource.atPath (Resource.therefore <| saveItem << changeItem title') (Debug.log "SaveItem path is" <| List.reverse rpath) model.resources
       }
 
       |> App.updated
@@ -357,7 +362,7 @@ update action now model =
       { model
       | resources =
           Resource.putPath Resource.chooseLeft
-          (List.reverse rpath) Resource.unknownResource model.resources
+          (Debug.log "DeleteItem path is" <| List.reverse rpath) Resource.unknownResource model.resources
       }
 
       |> App.updated

@@ -28,6 +28,8 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 --}
 
 
+-- TODO: implement comprehend' _and_ comprehendImpl_r
+
 module Scaffold.Resource
 
   (Resource,
@@ -44,11 +46,19 @@ module Scaffold.Resource
 
   assumeIf, assumeIfNot, assumeIfNow, assumeInCase, assumeInCaseNow,
   dispatchIf, dispatchIfNot, dispatchInCase, dispatchInCaseNow,
-  deriveIf, deriveIfNow, decideBy, maybeKnownNow,
+  deriveIf, deriveIfNow, decideBy, maybeKnownNow, otherwise,
 
-  comprehend, interpret, routeTo, catchError,
-  collapse, flatten, flattenDict, throughout, throughoutNow, therefore, within, otherwise,
+  therefore, therefore',
+  comprehend, comprehend',
+  interpret, interpret',
 
+  within,
+
+  throughout, throughoutNow,
+
+  flatten, flattenDict, collapse,
+
+  routeTo, catchError,
 
   isUnknown, isNotUnknown,
   isPending, isNotPending,
@@ -108,10 +118,10 @@ to their respective older counterparts.
 @docs otherwise, maybeKnownNow
 
 # Bulk Operations
-@docs decideBy, flatten, flattenDict, collapse, throughout, throughoutNow, therefore, within
+@docs decideBy, flatten, flattenDict, collapse, throughout, throughoutNow, therefore, therefore', within
 
 # Handling `UserTask` and `ResourceTask`
-@docs userTask, deltaTask, toProgramTask, comprehend, interpret, routeTo, catchError
+@docs userTask, deltaTask, toProgramTask, comprehend, comprehend', interpret, interpret', routeTo, catchError
 
 # Conditional Operations
 @docs dispatchIf, dispatchIfNot, dispatchInCase, dispatchInCaseNow
@@ -180,12 +190,20 @@ groupStructMap_ f stct =
   { stct | chgs = groupStructMapped_ f stct }
 
 
+groupStructKeyMap_ f stct =
+  { stct | chgs = groupStructKeyMapped_ f stct }
+
+
 groupStructMapped_ f stct =
+  groupStructKeyMapped_ (always f) stct
+
+
+groupStructKeyMapped_ f stct =
   let
     curr' = groupStructChanged_ stct |> .curr
 
   in
-    Dict.map (always f) curr'
+    Dict.map f curr'
 
 
 groupStructChanged_ stct =
@@ -411,6 +429,24 @@ comprehend xdcr optask =
   optask `andThen` (\ref -> { ref | resource = therefore xdcr ref.resource } |> Task.succeed)
 
 
+{-| Like `comprehend`, but accounts for the path of the leaves effected by the transformation
+by using `therefore'` on the result of the task. This prepends the reference path of the resource
+task, such that global context for the resource's location is available if desired.
+
+Note that you may specify a prefix path to the existing one to provide additional context in large
+resource group structures.
+-}
+comprehend' : (List String -> v -> v') -> ResourceTask euser v -> ResourceTask euser v'
+comprehend' xdcr optask =
+  optask `andThen` (\ref -> { ref | resource = therefore' xdcr ref.path ref.resource } |> Task.succeed)
+
+
+-- adapter for therefore implementation
+comprehendImpl_r : (List String -> v -> v') -> List String -> ResourceTask euser v -> ResourceTask euser v'
+comprehendImpl_r rxdcr rpath optask =
+  optask `andThen` (\ref -> { ref | resource = thereforeImpl_r rxdcr (List.reverse ref.path ++ rpath) ref.resource } |> Task.succeed)
+
+
 {-| Interpret the given `ResourceTask`'s resource output by a given transform function. NOTE that this
 can be literally any function whose signature ends in `ResourceTask euser v -> ResourceTask euser v'`,
 which is of course inclusive of `ResourceTask euser v -> ResourceTask euser v'` in the case that
@@ -418,6 +454,14 @@ which is of course inclusive of `ResourceTask euser v -> ResourceTask euser v'` 
 interpret : (Resource euser v -> Resource euser v') -> ResourceTask euser v -> ResourceTask euser v'
 interpret f optask =
   optask `andThen` (\ref -> { ref | resource = f ref.resource } |> Task.succeed)
+
+
+{-| Like `interpret`, but the prefix path of the resource is passed to the given function, and the
+user can optionally specify their own prefix path. `interpret'` is to `interpret` what `comprehend'`
+is to `comprehend`. -}
+interpret' : (List String -> Resource euser v -> Resource euser v') -> List String -> ResourceTask euser v -> ResourceTask euser v'
+interpret' f prepath optask =
+  optask `andThen` (\ref -> { ref | resource = f (prepath ++ ref.path) ref.resource } |> Task.succeed)
 
 
 {-| Route the results of a given `ResourceTask` to a given `ResourcePath`. -}
@@ -509,22 +553,47 @@ resouce structure, and thus any pending changes will be integrated immediately. 
 preserve deltas for the purpose of mirroring and efficient data flow, then one should be using
 deltaTo in order to transform just the changes. -}
 therefore : (v -> v') -> Resource euser v -> Resource euser v'
-therefore xdcr res =
-  case res of
-    Unknown -> Unknown
-    Pending -> Pending
-    Void -> Void
-
-    Undecided err' -> Undecided err'
-    Forbidden err' -> Forbidden err'
-    Known x' -> Known (xdcr x')
-
-    Operation optask -> Operation (comprehend xdcr optask)
-
-    Group stct -> { curr = groupStructMapped_ (therefore xdcr) stct, chgs = Dict.empty } |> Group
+therefore xdcr =
+  thereforeImpl_r (always xdcr) [ ]
 
 
-{-| DEPRECIATED version of therefore, not supporting type transformation. -}
+{-| `therefore`, but which includes the current path as the first argument. -}
+therefore' : (List String -> v -> v') -> List String -> Resource euser v -> Resource euser v'
+therefore' xdcr path =
+  thereforeImpl_r (List.reverse >> xdcr) (List.reverse path)
+
+
+-- The implementation deals with reversed paths. This is because during path construction, it is
+-- obviously more efficient to push path elements to the head of a list. The given reversed path
+-- transducer reverses said path, yielding the path itself, and does so once per concrete leaf in
+-- the resource group tree structure. This would only result in poor runtime performance in practice
+-- in the unlikely case that we have very large deltas which further consist of very deep trees.
+-- Since this scenario is highly unlikely and can easily be avoided by design from an engineering
+-- standpoint, that theoretical weakness does not have a substantial concrete cost.
+thereforeImpl_r : (List String -> v -> v') -> List String -> Resource euser v -> Resource euser v'
+thereforeImpl_r rxdcr rpath res =
+  let
+    stepIn_ key = thereforeImpl_r rxdcr (key :: rpath)
+
+  in
+    case res of
+      Unknown -> Unknown
+      Pending -> Pending
+      Void -> Void
+
+      Undecided err' -> Undecided err'
+      Forbidden err' -> Forbidden err'
+      Known x' -> Known (rxdcr rpath x')
+
+      Operation optask -> Operation (comprehendImpl_r rxdcr rpath optask)
+
+      Group stct -> { curr = Dict.empty, chgs = groupStructKeyMapped_ stepIn_ stct } |> Group
+
+
+{-| DEPRECIATED version of therefore, not supporting type transformation.
+
+NOTE : removed in version 5.
+-}
 within : (sub -> sub) -> Resource euser sub -> Resource euser sub
 within = therefore
 
@@ -964,6 +1033,9 @@ deltaOf = deltaTo identity
 
 {-| Convert a resource to program input. I've found that this is a very un-Elm-like way
 of doing things that makes the Elm Architecture harder to stick to. If anyone else finds a
-counterexample, please let me know! If it does turn out to be useful, I will complete the set. -}
+counterexample, please let me know! If it does turn out to be useful, I will complete the set.
+
+NOTE : DEPRECIATED, removed from v5.
+-}
 toProgram : (b -> ProgramInput a b c bad) -> Resource euser b -> Resource euser (ProgramInput a b c bad)
 toProgram modelInput model' = therefore modelInput model'

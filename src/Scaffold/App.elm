@@ -406,6 +406,8 @@ represent noop. Here's how it looked:
     defProgram myPresent myUpdate myModel0 `withInputs` [actionSignal0, actionSignal1]
 
 This is DEPRECIATED.
+
+NOTE : removed in version 5.
 -}
 withInputs : ProgramInput a b c bad -> List (Signal a) -> ProgramInput a b c bad
 withInputs inR sigs =
@@ -423,6 +425,7 @@ usable for defining Machine state machines as well as Program programs.
 
     defProgram' myPresent myStage myUpdate myModel0 `withSequenceInputs` [actionListSignal0, actionListSignal1]
 
+NOTE : removed in version 5.
 -}
 withSequenceInputs : ProgramInput a b c bad -> List (Signal (List a)) -> ProgramInput a b c bad
 withSequenceInputs inR sigs =
@@ -436,7 +439,10 @@ withSequenceInputs inR sigs =
 
 {-| Since action lists are internally combined using lazy lists, one may want to just hand over their
 LazyList without converting it to a list. This may sometimes be appropriate, but beware of unbounded
-laziness. Profiling is your friend here. -}
+laziness. Profiling is your friend here.
+
+NOTE : removed in version 5.
+-}
 withLazySequenceInputs : ProgramInput a b c bad -> List (Signal (LazyList a)) -> ProgramInput a b c bad
 withLazySequenceInputs inR sigs =
   { inR
