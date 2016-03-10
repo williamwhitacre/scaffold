@@ -264,8 +264,7 @@ render renderContext address rpath res =
 -- ViewResource.
 modelView : RenderContext -> Signal.Address (List Action) -> List String -> ModelResource -> ViewResource
 modelView renderContext address rpath res =
-  -- MARK TODO root path propagated to all concrete items during rendering blindly.
-  Resource.therefore (renderItem renderContext.knownStyle address rpath) res
+  Resource.therefore' (renderItem renderContext.knownStyle address) (List.reverse rpath) res
 
 
 -- Present the current view output.
