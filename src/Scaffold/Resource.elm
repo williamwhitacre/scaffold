@@ -74,6 +74,10 @@ module Scaffold.Resource
   atPath,
   putPath,
   getPath,
+  deletePath,
+  writePath,
+  movePath,
+  copyPath,
 
   chooseLeft,
   chooseRight,
@@ -130,7 +134,7 @@ to their respective older counterparts.
 @docs isUnknown, isNotUnknown, isPending, isNotPending, isUndecided, isNotUndecided, isForbidden, isNotForbidden, isVoid, isNotVoid, isNil, isNotNil, isKnown, isNotKnown, isOperation, isNotOperation, isGroup, isNotGroup
 
 # Manipulate and Use `ResourcePath`
-@docs prefixPath, atPath, putPath, getPath
+@docs prefixPath, atPath, putPath, getPath, deletePath, writePath, movePath, copyPath
 
 # Built-in Conflict Operators
 
@@ -612,11 +616,47 @@ atPath operation path res =
         _ -> res
 
 
-{-| Put a resource in to a group resource at the given path. -}
+{-| Delete the item at the given path. This equivalency holds:
+
+    atPath (always unknownResource) path res == deletePath path res
+
+-}
+deletePath : List String -> Resource euser v -> Resource euser v
+deletePath = atPath (always Unknown)
+
+
+{-| Put a resource in to a group resource at the given path. In the case that something is already
+there, use the `choice` function to determine which should be used. See the `choose*` family for some
+built-in functions. -}
 putPath : (Resource euser v -> Resource euser v -> Resource euser v) -> List String -> Resource euser v -> Resource euser v -> Resource euser v
 putPath choice path res' res =
   prefixPath path res'
   |> \res'' -> merge choice res'' res
+
+
+{-| Equivalent to `putPath chooseLeft`, this is a simple write which will always blindly overwrite the
+current resource at the given path. -}
+writePath : List String -> Resource euser v -> Resource euser v -> Resource euser v
+writePath = putPath chooseLeft
+
+
+{-| Move the resource at a given path `path` in the resource group structure to a target path `path'`. -}
+movePath : (Resource euser v -> Resource euser v -> Resource euser v) -> List String -> List String -> Resource euser v -> Resource euser v
+movePath = cpPathImpl_ True
+
+
+{-| Copy the resource at a given path `path` in the resource group structure to a target path `path'`. -}
+copyPath : (Resource euser v -> Resource euser v -> Resource euser v) -> List String -> List String -> Resource euser v -> Resource euser v
+copyPath = cpPathImpl_ False
+
+
+cpPathImpl_ : Bool -> (Resource euser v -> Resource euser v -> Resource euser v) -> List String -> List String -> Resource euser v -> Resource euser v
+cpPathImpl_ bDoMove choice path path' res =
+  if path /= path' then
+    putPath choice path' (getPath path res) res
+    |> \res'' -> if bDoMove then putPath chooseLeft path Unknown res'' else res''
+  else
+    res
 
 
 {-| Collision handler for nested Resources that always chooses the left hand side. -}

@@ -317,8 +317,7 @@ update action now model =
 
     NewItem rpath ->
       { model
-      | resources = Resource.putPath Resource.chooseLeft
-          ("" :: rpath |> List.reverse) (Resource.defResource newItem) model.resources
+      | resources = Resource.writePath ("" :: rpath |> List.reverse) (Resource.defResource newItem) model.resources
       }
 
       |> App.updated
@@ -349,19 +348,22 @@ update action now model =
 
       |> App.updated
 
-    SaveItem rpath title' ->
-      { model
-      | resources =
-          Resource.atPath (Resource.therefore <| saveItem << changeItem title') (Debug.log "SaveItem path is" <| List.reverse rpath) model.resources
-      }
+    SaveItem (rtitle :: rtail) title' ->
+      List.reverse (rtitle :: rtail)
+      |> \path'' -> List.reverse (title' :: rtail)
+      |> \path' ->
+        { model
+        | resources =
+            Resource.atPath (Resource.therefore <| saveItem << changeItem title') (Debug.log "SaveItem path is" path'') model.resources
+            |> Resource.movePath Resource.chooseLeft path'' path'
+        }
 
-      |> App.updated
+        |> App.updated
 
     DeleteItem rpath ->
       { model
       | resources =
-          Resource.putPath Resource.chooseLeft
-          (Debug.log "DeleteItem path is" <| List.reverse rpath) Resource.unknownResource model.resources
+          Resource.deletePath (Debug.log "DeleteItem path is" <| List.reverse rpath) model.resources
       }
 
       |> App.updated
