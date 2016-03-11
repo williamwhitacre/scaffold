@@ -1040,11 +1040,12 @@ deltaTo f res =
   case res of
     Group stct ->
       Dict.foldl
-        (\key res'' grp -> update (prefixPath [key] (f res'')) grp)
-        (Group groupNew_)
+        (\key res' -> deltaTo f res' |> Dict.insert key)
+        Dict.empty
         stct.chgs
+      |> \chgs' -> { curr = Dict.empty, chgs = chgs' }
+      |> Group
 
-    Operation optask -> Pending
     _ -> f res
 
 

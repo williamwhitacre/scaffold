@@ -358,19 +358,22 @@ update action now model =
       |> \path' ->
         { model
         | resources =
-            Resource.atPath (Resource.therefore <| saveItem << changeItem title') (Debug.log "SaveItem path is" path'') model.resources
-            |> Resource.movePath Resource.chooseLeft path'' path'
+            Resource.getPath (Debug.log "SaveItem path is" path'') model.resources
+            |> Resource.therefore (changeItem title' >> saveItem)
+            |> \saved -> Resource.writePath (Debug.log "SaveItem new path is" path') saved model.resources
+            |> Resource.deletePath (Debug.log "deleting old copy at path" path'')
         }
 
         |> App.updated
 
     SaveItem [] _ ->
-      App.updated model
+      Debug.log "NOT SUPPOSED TO GET HERE" ()
+      |> \_ -> App.updated model
 
     DeleteItem rpath ->
       { model
       | resources =
-          Resource.atPath (always Resource.unknownResource) (Debug.log "DeleteItem path is" <| List.reverse rpath) model.resources
+          Resource.deletePath (Debug.log "DeleteItem path is" <| List.reverse rpath) model.resources
       }
 
       |> App.updated
