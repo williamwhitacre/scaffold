@@ -2,7 +2,7 @@
 
 import Scaffold.App as App
 import Scaffold.Machine as Machine exposing (Machine)
-import Scaffold.Resource as Resource exposing (Resource, ResourceRef, UserTask, ResourceTask)
+import Scaffold.Resource as Res exposing (Resource, ResourceRef, UserTask, ResourceTask)
 
 -- Just for show
 import Graphics.Element
@@ -148,12 +148,12 @@ revertItem item =
 
 resources0 : ModelResource
 resources0 =
-  Resource.groupResource []
+  Res.groupResource []
   {-
-  Resource.groupResource
-    [ ("foo", Resource.defResource (makeItem "foo value"))
-    , ("bar", Resource.defResource (makeItem "bar value"))
-    , ("fuq", Resource.defResource (makeItem "fuq value"))
+  Res.groupResource
+    [ ("foo", Res.defResource (makeItem "foo value"))
+    , ("bar", Res.defResource (makeItem "bar value"))
+    , ("fuq", Res.defResource (makeItem "fuq value"))
     ]
   -}
 
@@ -161,8 +161,8 @@ resources0 =
 -- Initial model.
 model0 : Model
 model0 =
-    { resources = Resource.pendingResource
-    , views = Resource.pendingResource
+    { resources = Res.pendingResource
+    , views = Res.pendingResource
     , output = Html.h1 [] [Html.text "Please wait..."]
     , renderContext = defaultRenderContext
     }
@@ -171,8 +171,7 @@ model0 =
 -- TODO: add controls!
 renderItem : Html.Attribute -> Signal.Address (List Action) -> List String -> TreeItem -> Html
 renderItem styleAttrib address rpath item =
-  Debug.log "render item at" (List.reverse rpath)
-  |> \_ -> case item.editTitle of
+  case item.editTitle of
     Nothing ->
       Html.div
         [ styleAttrib ] -- attribs
@@ -202,24 +201,20 @@ renderBad styleAttrib address res =
     [ Html.text "Unexpected Resource Tag!!!" ]
 
 
--- argument given to `Resource.flattenDict` for reducing a `ViewResource` in to a single Html element.
+-- argument given to `Res.flattenDict` for reducing a `ViewResource` in to a single Html element.
 -- see below in render for the actual usage.
 renderGroup : RenderContext -> Signal.Address (List Action) -> List String -> Dict String ViewResource -> Html
 renderGroup renderContext address rpath resources =
   let
-    htmlChildren =
-      Dict.foldr
-        (\k r' htmlList -> (render renderContext address (Debug.log "render child" <| k :: rpath) r') :: htmlList)
-        []
+    htmlChildren = Dict.foldr (\k r' -> (::) (render renderContext address (k :: rpath) r')) []
 
     htmlGroup children =
-      let
-        buttons =
-          [ Html.button [ Html.Events.onClick address [ NewItem rpath ] ] [ Html.text "New Item" ]
-          ]
+      [ Html.button
+          [ Html.Events.onClick address [ NewItem rpath ] ]
+          [ Html.text "New Item" ]
+      ] ++ children
 
-      in
-        Html.div [ renderContext.groupStyle ] (buttons ++ children)
+      |> Html.div [ renderContext.groupStyle ]
 
     htmlContainer grouped =
       Html.div
@@ -240,72 +235,59 @@ renderGroup renderContext address rpath resources =
     resources |> htmlChildren >> htmlGroup >> htmlContainer
 
 
+renderPlaceholder style' text' =
+  Html.div [ style' ] [ Html.text text' ]
+
+
 -- render a ViewResource recursively. If the given ViewResource is a group, it is reduced to
 -- defined HTML, and if void or pending, it is rendered using special placeholders (currently not
 -- a lot of effort in to what they look like at all). `otherwise` is used with the special renderBad
 -- function to reduce the final output to plain HTML.
 render : RenderContext -> Signal.Address (List Action) -> List String -> ViewResource -> Html
 render renderContext address rpath res =
-  res
+  -- recursive flatten function.
+  Res.flattenDict (renderGroup renderContext address rpath >> Res.defResource) res
 
-  |> (Resource.flattenDict (renderGroup renderContext address (Debug.log "render at path" rpath) >> Resource.defResource)
-      -- replace me with a control.
-      >> Resource.assumeIfNow Resource.isVoid
-          (Html.div [ renderContext.voidStyle ] [ Html.text "Nothing here!" ])
-
-      -- replace me with a better indicator
-      >> Resource.assumeIfNow Resource.isPending
-          (Html.div [ renderContext.pendingStyle ] [ Html.text "Please wait!" ])
-
-      -- in any other case, simply use the renderBad function.
-      >> Resource.otherwise (renderBad renderContext.badStyle address res)
-    )
+  -- map placeholders and close off with `otherwise`
+  |> Res.assumeIfNow Res.isVoid (renderPlaceholder renderContext.voidStyle "Nothing here.")
+  |> Res.assumeIfNow Res.isPending (renderPlaceholder renderContext.voidStyle "Please wait.")
+  |> Res.otherwise (renderBad renderContext.badStyle address res)
 
 
 -- modelView is applied to the deltas of the ModelResource to get appropriate deltas for the
--- ViewResource.
+-- ViewRes.
 modelView : RenderContext -> Signal.Address (List Action) -> List String -> ModelResource -> ViewResource
 modelView renderContext address rpath res =
-  Resource.therefore' (renderItem renderContext.knownStyle address) (List.reverse rpath) res
+  Res.therefore' (renderItem renderContext.knownStyle address) (List.reverse rpath) res
 
 
 -- Present the current view output.
 present : Signal.Address (List Action) -> Time -> Model -> App.ViewOutput Action Html ()
 present address now model =
-  model.output
-
-  |> App.presented
+  App.presented model.output
 
 
--- collapse : (comparable -> Resource euser v -> v -> Resource euser v) -> v -> Resource euser v -> Resource euser v
-
--- Update the model. Nothing unfamiliar here.
 -- TODO : Add dispatch phase
 stage : Signal.Address (List Action) -> Time -> Model -> App.UpdatedModel Action Model ()
 stage address now model =
   let
-    dres =
-      Resource.deltaOf model.resources
+    -- get and transform deltas
+    dres = Res.deltaOf model.resources
+    dviews = modelView model.renderContext address [ ] dres
 
-    -- Transform the changes to the model to a view delta using our modelView function
-    dviews =
-      modelView model.renderContext address [ ] dres
+    -- update the resource group structures with the deltas.
+    resources' = Res.integrate model.resources
+    views' = Res.update dviews model.views
 
-    -- Update the view structure with the delta we got.
-    views' =
-      Resource.update dviews model.views
-
-    -- Resource.dispatch resources'
-    -- |> List.map deltaTask
+    -- render the current view.
+    output' = render model.renderContext address [ ] views'
   in
-    { model
-    | resources = Resource.integrate model.resources
-    , views = views'
-    , output = render model.renderContext address [ ] views'
-    }
-
-    |> App.updated
-
+    App.updated
+      { model
+      | resources = resources'
+      , views = views'
+      , output = output'
+      }
 
 
 -- Update the model. Nothing unfamiliar here.
@@ -313,44 +295,31 @@ update : Action -> Time -> Model -> App.UpdatedModel Action Model ()
 update action now model =
   case action of
     Delta dres ->
-      { model
-      | resources = Resource.update dres model.resources
-      }
-
-      |> App.updated
+      App.updated { model | resources = Res.update dres model.resources }
 
     NewItem rpath ->
       { model
-      | resources = Resource.writePath ("" :: rpath |> List.reverse) (Resource.defResource newItem) model.resources
-      }
-
-      |> App.updated
-
+      | resources =
+        Res.writePath ("" :: rpath |> List.reverse) (Res.defResource newItem) model.resources
+      } |> App.updated
 
     EditItem rpath ->
       { model
       | resources =
-          Resource.atPath (Resource.therefore editItem) (Debug.log "EditItem path is" <| List.reverse rpath) model.resources
-      }
-
-      |> App.updated
-
+        Res.atPath (Res.therefore editItem) (List.reverse rpath) model.resources
+      } |> App.updated
 
     RevertItem rpath ->
       { model
       | resources =
-          Resource.atPath (Resource.therefore revertItem) (Debug.log "RevertItem path is" <| List.reverse rpath) model.resources
-      }
-
-      |> App.updated
+        Res.atPath (Res.therefore revertItem) (List.reverse rpath) model.resources
+      } |> App.updated
 
     ChangeItem rpath title' ->
       { model
       | resources =
-          Resource.atPath (Resource.therefore <| changeItem title') (Debug.log "ChangeItem path is" <| List.reverse rpath) model.resources
-      }
-
-      |> App.updated
+        Res.atPath (Res.therefore <| changeItem title') (List.reverse rpath) model.resources
+      } |> App.updated
 
     SaveItem (rtitle :: rtail) title' ->
       List.reverse (rtitle :: rtail)
@@ -358,28 +327,21 @@ update action now model =
       |> \path' ->
         { model
         | resources =
-            Resource.getPath (Debug.log "SaveItem path is" path'') model.resources
-            |> Resource.therefore (changeItem title' >> saveItem)
-            |> \saved -> Resource.writePath (Debug.log "SaveItem new path is" path') saved model.resources
-            |> Resource.deletePath (Debug.log "deleting old copy at path" path'')
-        }
-
-        |> App.updated
-
-    SaveItem [] _ ->
-      Debug.log "NOT SUPPOSED TO GET HERE" ()
-      |> \_ -> App.updated model
+            Res.getPath path'' model.resources
+            |> Res.therefore (changeItem title' >> saveItem)
+            |> \saved -> Res.writePath path' saved model.resources
+            |> Res.deletePath path''
+        } |> App.updated
 
     DeleteItem rpath ->
       { model
       | resources =
-          Resource.deletePath (Debug.log "DeleteItem path is" <| List.reverse rpath) model.resources
-      }
+        Res.deletePath (List.reverse rpath) model.resources
+      } |> App.updated
 
-      |> App.updated
+    _ ->
+      App.updated model
 
-
--- toProgramTask : (Error.Error euser -> List a) -> (Resource euser v -> List a) -> UserTask euser v -> ProgramTask bad a
 
 -- NOTE: Scaffold.App programs will execute all of the actions implied by it's initial inputs at startup, so
 -- it is not neccessary to compute an initial model with the starting metrics for your view. Internally this is
