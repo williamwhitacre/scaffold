@@ -1043,7 +1043,7 @@ deltaTo f res =
         (\key res' -> deltaTo f res' |> Dict.insert key)
         Dict.empty
         stct.chgs
-      |> \chgs' -> { curr = Dict.empty, chgs = chgs' }
+      |> \chgs' -> { curr = chgs', chgs = Dict.empty }
       |> Group
 
     _ -> f res
