@@ -4,6 +4,8 @@ import Scaffold.App as App
 import Scaffold.Machine as Machine exposing (Machine)
 import Scaffold.Resource as Resource exposing (Resource, ResourceRef, UserTask, ResourceTask)
 
+-- Just for show
+import Graphics.Element
 
 import Html exposing (Html, div, span, button, text)
 import Html.Events exposing (onClick)
@@ -270,7 +272,9 @@ modelView renderContext address rpath res =
 -- Present the current view output.
 present : Signal.Address (List Action) -> Time -> Model -> App.ViewOutput Action Html ()
 present address now model =
-  App.presented model.output
+  model.output
+
+  |> App.presented
 
 
 -- collapse : (comparable -> Resource euser v -> v -> Resource euser v) -> v -> Resource euser v -> Resource euser v
@@ -366,7 +370,7 @@ update action now model =
     DeleteItem rpath ->
       { model
       | resources =
-          Resource.deletePath (Debug.log "DeleteItem path is" <| List.reverse rpath) model.resources
+          Resource.atPath (always Resource.unknownResource) (Debug.log "DeleteItem path is" <| List.reverse rpath) model.resources
       }
 
       |> App.updated

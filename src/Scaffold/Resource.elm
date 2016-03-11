@@ -709,32 +709,14 @@ merge choice left' right' =
           |> \res -> groupPut_ key (merge choice res' res) rhs'
         )
         rhs
-        (groupStructChanged_ lhs |> .curr)
+        (Dict.union lhs.chgs lhs.curr)
 
       |> Group
 
     (Group lhs, old) ->
-      choice (Group { curr = Dict.empty, chgs = groupStructChanged_ lhs |> .curr }) old
+      choice (Group { curr = Dict.empty, chgs = (Dict.union lhs.chgs lhs.curr) }) old
 
     (_, _) -> choice left' right'
-
-  {-let
-    groupMerge_ lhs rhs =
-      let
-        (lhsTail, isectDict) = Dict.partition
-          (\key _ -> groupGet_ key rhs |> isUnknown)
-          (groupStructChanged_ lhs |> .curr)
-
-      in
-        Dict.foldl
-          (\key lhv rhs' -> merge choice lhv (groupGet_ key rhs') |> groupPut_ key lhv)
-          { rhs | chgs = Dict.union lhsTail rhs.chgs }
-          isectDict
-
-  in
-    case (left', right') of
-      (Group leftStct, Group rightStct) -> Group (groupMerge_ leftStct rightStct)
-      (_, _) -> choice left' right'-}
 
 
 {-| Merge many folds from the left over the given list of resources with merge. -}
