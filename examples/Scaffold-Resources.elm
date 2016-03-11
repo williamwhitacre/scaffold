@@ -148,7 +148,10 @@ revertItem item =
 
 resources0 : ModelResource
 resources0 =
-  Res.groupResource []
+  Res.groupResource
+    [ ("personal", Res.groupResource [ ("family", Res.groupResource []), ("friends", Res.groupResource []) ])
+    , ("work", Res.groupResource [ ("meetings", Res.groupResource []), ("tasks", Res.groupResource []) ])
+    ]
   {-
   Res.groupResource
     [ ("foo", Res.defResource (makeItem "foo value"))
