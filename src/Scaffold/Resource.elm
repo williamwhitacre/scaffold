@@ -947,7 +947,7 @@ defResource = Known
 {-|  -}
 groupResource : List (String, Resource euser v) -> Resource euser v
 groupResource members =
-  Group { curr = Dict.fromList members, chgs = Dict.empty }
+  Group { curr = Dict.empty, chgs = Dict.fromList members }
 
 
 {-|  -}

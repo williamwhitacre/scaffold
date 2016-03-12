@@ -209,7 +209,7 @@ renderBad styleAttrib address res =
 renderGroup : RenderContext -> Signal.Address (List Action) -> List String -> Dict String ViewResource -> Html
 renderGroup renderContext address rpath resources =
   let
-    htmlChildren = Dict.foldr (\k r' -> (::) (render renderContext address (k :: rpath) r')) []
+    htmlChildren = Dict.foldr (\k r' -> (::) (render renderContext address (rpath ++ [k]) r')) []
 
     htmlGroup children =
       [ Html.button
