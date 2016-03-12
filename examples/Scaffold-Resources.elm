@@ -300,50 +300,52 @@ update action now model =
     Delta dres ->
       App.updated { model | resources = Res.update dres model.resources }
 
-    NewItem rpath ->
+    NewItem path ->
       { model
       | resources =
-        Res.writePath ("" :: rpath |> List.reverse) (Res.defResource newItem) model.resources
+        Res.writePath (path ++ [""] |> Debug.log "new item path") (Res.defResource newItem) model.resources
       } |> App.updated
 
-    EditItem rpath ->
+    EditItem path ->
       { model
       | resources =
-        Res.atPath (Res.therefore editItem) (List.reverse rpath) model.resources
+        Res.atPath (Res.therefore editItem) (path |> Debug.log "edit item path") model.resources
       } |> App.updated
 
-    RevertItem rpath ->
+    RevertItem path ->
       { model
       | resources =
-        Res.atPath (Res.therefore revertItem) (List.reverse rpath) model.resources
+        Res.atPath (Res.therefore revertItem) (path |> Debug.log "revert item path") model.resources
       } |> App.updated
 
-    ChangeItem rpath title' ->
+    ChangeItem path title' ->
       { model
       | resources =
-        Res.atPath (Res.therefore <| changeItem title') (List.reverse rpath) model.resources
+        Res.atPath (Res.therefore <| changeItem title') (path |> Debug.log "change item path") model.resources
       } |> App.updated
 
-    SaveItem (rtitle :: rtail) title' ->
-      List.reverse (rtitle :: rtail)
-      |> \path'' -> List.reverse (title' :: rtail)
+    SaveItem path'' title' ->
+      List.reverse path''
+      |> \rpath'' -> (case rpath'' of
+        _ :: rtail -> List.reverse (title' :: rtail)
+        [] -> [])
       |> \path' ->
         { model
         | resources =
-            Res.getPath path'' model.resources
+            Res.getPath (path'' |> Debug.log "save item prior path") model.resources
             |> Res.therefore (changeItem title' >> saveItem)
-            |> \saved -> Res.writePath path' saved model.resources
+            |> \saved -> Res.writePath (path' |> Debug.log "save item new path") saved model.resources
             |> Res.deletePath path''
         } |> App.updated
 
-    DeleteItem rpath ->
+    DeleteItem path ->
       { model
       | resources =
-        Res.deletePath (List.reverse rpath) model.resources
+        Res.deletePath (path |> Debug.log "delete item path") model.resources
       } |> App.updated
 
-    _ ->
-      App.updated model
+    --_ ->
+    --  App.updated model
 
 
 -- NOTE: Scaffold.App programs will execute all of the actions implied by it's initial inputs at startup, so
