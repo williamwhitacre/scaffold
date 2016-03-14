@@ -35,8 +35,7 @@ module Scaffold.App
 
   defProgram, defProgram',
 
-  run, runAnd, runWithWork, withInputs, withLazySequenceInputs, defLazySequenceInputs, withSequenceInputs,
-  defSequenceInputs, sink,
+  run, runAnd, defSequenceInputs, defLazySequenceInputs, sink,
 
   updated, presented, withTasks, withDispatchment, withChildren, viewOutputTask,
 
@@ -54,8 +53,8 @@ module Scaffold.App
   programSnapshot, programSnapshotAddDispatchment, programSnapshotDispatch,
   programSnapshotPresent, programSnapshotStage, programSnapshotUpdate, performCycle,
 
-  programAgentSuccess, programAgentFailure, programAgent, programSuccessAgent, programFailureAgent,
-  programBinaryAgent, programBlindAgent, programNilAgent, programResultAgent, ignoreError)
+  agentSuccess, agentFailure, agent, successAgent, failureAgent,
+  binaryAgent, blindAgent, nilAgent, resultAgent, ignoreError)
 
   where
 
@@ -63,19 +62,21 @@ module Scaffold.App
 
     myProgramOutput : ProgramOutput MyAction MyModel Layout.Item Error
     myProgramOutput =
-      myProgram
-        `withSequenceInputs`
-          [ someVeryImportantBrowserEnvironmentInput
-          , someOtherOutsideSignal
-          ]
-        `runWithWork`
-          (computeTask doMyComplicatedStartupWork withThisData)
-      |> (it'sErrorConnector myErrorHandler)
+      defProgram' myPresent myStage myUpdate myInitialModel
+      |> defSequenceInputs
+        [ someVeryImportantBrowserEnvironmentInput
+        , someOtherOutsideSignal
+        ]
+      |> runAnd (computeTask doMyComplicatedStartupWork myData)
+      |> it'sErrorConnector myErrorHandler
+      |> thisAddressAsync myOutsideMailboxAddress
       |> itself
 
 
     main : Signal Graphics.Element.Element
-    main = Layout.fromItem <~ myProgramOutput.view'
+    main =
+      viewOutput myProgramOutput
+      |> Signal.map Layout.fromItem
 
 
     port sink : Signal (Task z ())
@@ -85,11 +86,11 @@ module Scaffold.App
 # Definitions
 @docs AgentStatus, ComputedResult, ComputedSuccess, ProgramInput, ProgramOutput, ProgramSnapshot, ProgramConnector, ProgramTask, TaskDispatchment, UpdatedModel, ViewOutput
 
-# Define Program Programs
+# Define Programs
 @docs defProgram, defProgram'
 
-# Run Program Programs
-@docs run, runAnd, runWithWork, withInputs, defLazySequenceInputs, defSequenceInputs, withLazySequenceInputs, withSequenceInputs, sink
+# Run Programs
+@docs run, runAnd, defLazySequenceInputs, defSequenceInputs, sink
 
 # UpdatedModel and ViewOutput Manipulation
 @docs updated, presented, withTasks, withDispatchment, withChildren, viewOutputTask
@@ -107,7 +108,7 @@ module Scaffold.App
 @docs programSnapshot, programSnapshotAddDispatchment, programSnapshotDispatch, programSnapshotPresent, programSnapshotStage, programSnapshotUpdate, performCycle
 
 # Program Task Agents
-@docs programAgentSuccess, programAgentFailure, programAgent, programSuccessAgent, programFailureAgent, programBinaryAgent, programBlindAgent, programNilAgent, programResultAgent, ignoreError
+@docs agentSuccess, agentFailure, agent, successAgent, failureAgent, binaryAgent, blindAgent, nilAgent, resultAgent, ignoreError
 
 -}
 
@@ -386,65 +387,15 @@ defProgram' present stage update model =
 
 {-| Forward applicative alternative to withSequenceInputs. -}
 defSequenceInputs : List (Signal (List a)) -> ProgramInput a b c bad -> ProgramInput a b c bad
-defSequenceInputs = flip withSequenceInputs
-
-
-{-| Forward applicative alternative to withLazySequenceInputs. -}
-defLazySequenceInputs : List (Signal (LazyList a)) -> ProgramInput a b c bad -> ProgramInput a b c bad
-defLazySequenceInputs = flip withLazySequenceInputs
-
-
-{-
-  e.g. defProgram present update model0 `withSequenceInputs` myInputs
--}
-
-{-| withInputs is the oldest way in Gigan of using action inputs, from before we started using
-lists of actions. Lists of actions are much more powerful because not only can they be used to
-make sure sequences of actions run atomically, but it also gives us an obvious and tagless way to
-represent noop. Here's how it looked:
-
-    defProgram myPresent myUpdate myModel0 `withInputs` [actionSignal0, actionSignal1]
-
-This is DEPRECIATED.
-
-NOTE : removed in version 5.
--}
-withInputs : ProgramInput a b c bad -> List (Signal a) -> ProgramInput a b c bad
-withInputs inR sigs =
-  { inR
-  | inputs = inR.inputs +++ (List.foldr (\x ls -> (x ~> Lazy.List.singleton) ::: ls) Lazy.List.empty sigs)
-  }
-
-
-{-| withSequenceInputs is the preferred way of piping outside sources of actions in to an program
-program. You'll notice from the way this is used that ProgramInput definitions made by defProgram'
-or defProgram refrain from including any inputs right away. The reason for this is that a program
-and the _source_ of it's input are two distinctly separate concerns, though the _content_ of it's
-input is not. In Machine, the inputs of an ProgramInput are not used. This way, ProgramInput is also
-usable for defining Machine state machines as well as Program programs.
-
-    defProgram' myPresent myStage myUpdate myModel0 `withSequenceInputs` [actionListSignal0, actionListSignal1]
-
-NOTE : removed in version 5.
--}
-withSequenceInputs : ProgramInput a b c bad -> List (Signal (List a)) -> ProgramInput a b c bad
-withSequenceInputs inR sigs =
+defSequenceInputs sigs inR =
   { inR
   | inputs = inR.inputs +++ (List.foldr (\x ls -> (x ~> Lazy.List.fromList) ::: ls) Lazy.List.empty sigs)
   }
 
 
--- An alternative lazy list address for cases where you really need lazy lists for the performance
--- boost.
-
-{-| Since action lists are internally combined using lazy lists, one may want to just hand over their
-LazyList without converting it to a list. This may sometimes be appropriate, but beware of unbounded
-laziness. Profiling is your friend here.
-
-NOTE : removed in version 5.
--}
-withLazySequenceInputs : ProgramInput a b c bad -> List (Signal (LazyList a)) -> ProgramInput a b c bad
-withLazySequenceInputs inR sigs =
+{-| Forward applicative alternative to withLazySequenceInputs. -}
+defLazySequenceInputs : List (Signal (LazyList a)) -> ProgramInput a b c bad -> ProgramInput a b c bad
+defLazySequenceInputs sigs inR =
   { inR
   | inputs = inR.inputs +++ (List.foldr (\x ls -> x ::: ls) Lazy.List.empty sigs)
   }
@@ -524,7 +475,8 @@ withDispatchment dispatchment out' =
 TaskDispatchment of the current output. This is preferred when doing model composition with Machine.
 For example:
 
-    staged { collectionModel | memberViews = memberOutputs } `withChildren` memberOutputs
+    App.staged { collectionModel | memberViews = memberOutputs }
+    |> App.withChildren memberOutputs
 
 where memberOutputs is a list of machinePresent or machinePresentAs outputs in the example.
 -}
@@ -559,14 +511,14 @@ type AgentStatus bad a =
 
 
 {-| Successful ProgramAgent output. -}
-programAgentSuccess : List a -> AgentStatus bad a
-programAgentSuccess actions =
+agentSuccess : List a -> AgentStatus bad a
+agentSuccess actions =
   AgentSuccess actions
 
 
 {-| Failed ProgramAgent output. -}
-programAgentFailure : bad -> AgentStatus bad a
-programAgentFailure err' =
+agentFailure : bad -> AgentStatus bad a
+agentFailure err' =
   AgentFailure err'
 
 
@@ -583,8 +535,8 @@ versa, because we get an AgentStatus which may be successful or failing either w
 can skip error handling altogether if you already know what to do with the failure from the scope
 you're in; you can simply map the failure on to some actions that perform an appropriate
 contingency. -}
-programAgent : (x -> AgentStatus bad a) -> (y -> AgentStatus bad a) -> Task y x -> ProgramTask bad a
-programAgent onSuccess onFailure task =
+agent : (x -> AgentStatus bad a) -> (y -> AgentStatus bad a) -> Task y x -> ProgramTask bad a
+agent onSuccess onFailure task =
   (task
     `andThen` (onSuccess >> agentStatusResult)
     `onError` (onFailure >> agentStatusResult))
@@ -598,40 +550,40 @@ programAgent onSuccess onFailure task =
 
 {-| A binary program agent. This does not process any of the results, but simply always gives the
 succesful AgentStatus (the first one) on task success, otherwise it gives the failed AgentStatus. -}
-programBinaryAgent : AgentStatus bad a -> AgentStatus bad a -> Task y x -> ProgramTask bad a
-programBinaryAgent onSuccessResult onFailureResult =
-  programAgent (always onSuccessResult) (always onFailureResult)
+binaryAgent : AgentStatus bad a -> AgentStatus bad a -> Task y x -> ProgramTask bad a
+binaryAgent onSuccessResult onFailureResult =
+  agent (always onSuccessResult) (always onFailureResult)
 
-{-| This is a combination of programAgent and programBinary agent which processes successful results
+{-| This is a combination of agent and programBinary agent which processes successful results
 to get an AgentStatus, otherwise giving the failed agent status. -}
-programSuccessAgent : (x -> AgentStatus bad a) -> AgentStatus bad a -> Task y x -> ProgramTask bad a
-programSuccessAgent onSuccess onFailureResult =
-  programAgent onSuccess (always onFailureResult)
+successAgent : (x -> AgentStatus bad a) -> AgentStatus bad a -> Task y x -> ProgramTask bad a
+successAgent onSuccess onFailureResult =
+  agent onSuccess (always onFailureResult)
 
-{-| This is a combination of programAgent and programBinary agent which gives the successful agent
+{-| This is a combination of agent and programBinary agent which gives the successful agent
 status in the case of success, and processes failed results to get an AgentStatus otherwise . -}
-programFailureAgent : AgentStatus bad a -> (y -> AgentStatus bad a) -> Task y x -> ProgramTask bad a
-programFailureAgent onSuccessResult onFailure =
-  programAgent (always onSuccessResult) onFailure
+failureAgent : AgentStatus bad a -> (y -> AgentStatus bad a) -> Task y x -> ProgramTask bad a
+failureAgent onSuccessResult onFailure =
+  agent (always onSuccessResult) onFailure
 
 {-| The other program agents defined so far are less succinct because they take two arguments, one
 which applies to the success case and one which applies to the failure case. This one takes a single
 function which processes the task's outcome as a Result, and so is generally a bit shorter to write. -}
-programResultAgent : (Result y x -> AgentStatus bad a) -> Task y x -> ProgramTask bad a
-programResultAgent produceResult =
-  programAgent (Result.Ok >> produceResult) (Result.Err >> produceResult)
+resultAgent : (Result y x -> AgentStatus bad a) -> Task y x -> ProgramTask bad a
+resultAgent produceResult =
+  agent (Result.Ok >> produceResult) (Result.Err >> produceResult)
 
 {-| If we don't care about the outcome of a task because it can't fail or produce a meaningful
 result, we can just queue up something to do after it's done. This is perfect for using delay tasks. -}
-programBlindAgent : AgentStatus bad a -> Task y x -> ProgramTask bad a
-programBlindAgent result =
-  programBinaryAgent result result
+blindAgent : AgentStatus bad a -> Task y x -> ProgramTask bad a
+blindAgent result =
+  binaryAgent result result
 
 {-| No matter what, do nothing. This will get your task to run, but no kind of action or error
 feedback will be produced. -}
-programNilAgent : Task y x -> ProgramTask bad a
-programNilAgent =
-  programBlindAgent (AgentSuccess [])
+nilAgent : Task y x -> ProgramTask bad a
+nilAgent =
+  blindAgent (AgentSuccess [])
 
 
 
@@ -822,8 +774,6 @@ performCycle input address (now, actions) (state, _) =
   |> programSnapshotDispatch
 
 
-{-| This is the workhorse of Scaffold.App. Given an ProgramInput and some starting ProgramTask,
-run the Program program described by the input to give an ProgramOutput. -}
 runWithWork : ProgramInput a b c bad -> ProgramTask bad a -> ProgramOutput a b c bad
 runWithWork programInput startupTask =
   let

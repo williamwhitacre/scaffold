@@ -38,7 +38,10 @@ module Scaffold.Layout
 
   appendGroup, group, groupAt, groupAtBefore, groupFromArray, groupFromDict,
   groupSize, prependGroup, computed, butBefore, butBeforeAt, butBeforeSlice, thenDo, thenDoAt,
-  thenDoSlice, flatten, flattenOutTo, flattenTo, flattenWithin, flattenWithinOutTo,
+  thenDoSlice,
+
+  flatten, flattenOutTo, flattenTo, flattenWithin, flattenWithinOutTo,
+  flattenStyled, flattenToStyled, flattenWithinStyled, flattenOutToStyled, flattenWithinOutToStyled,
 
   spacedBetween, spacedBy, regularly, vertically, horizontally,
 
@@ -51,7 +54,7 @@ module Scaffold.Layout
 
   lerpOf, move, moveX, moveY, place, placeX, placeY,
 
-  emptyItem, toItem, fromItem)
+  emptyItem, makeItem, toItem, fromItem, fromItemStyled)
 
   where
 
@@ -64,7 +67,7 @@ module Scaffold.Layout
 @docs adjustedRule, horizontalRule, horizontalRuleBetween, horizontalRuleCentered, itemHorizontalRule, itemRule, itemVerticalRule, ruleBetween, ruleCenter, snapToRule, towardsRule, towardsRuleRelative, verticalRule, verticalRuleBetween, verticalRuleCentered
 
 # Grouping and Group Operations
-@docs appendGroup, group, groupAt, groupAtBefore, groupFromArray, groupFromDict, groupSize, prependGroup, computed, butBefore, butBeforeAt, butBeforeSlice, thenDo, thenDoAt, thenDoSlice, flatten, flattenOutTo, flattenTo, flattenWithin, flattenWithinOutTo
+@docs appendGroup, group, groupAt, groupAtBefore, groupFromArray, groupFromDict, groupSize, prependGroup, computed, butBefore, butBeforeAt, butBeforeSlice, thenDo, thenDoAt, thenDoSlice, flatten, flattenOutTo, flattenTo, flattenWithin, flattenWithinOutTo, flattenStyled, flattenToStyled, flattenWithinStyled, flattenOutToStyled, flattenWithinOutToStyled
 
 # Group Spacing and Distribution.
 @docs spacedBetween, spacedBy, regularly, vertically, horizontally
@@ -82,7 +85,7 @@ module Scaffold.Layout
 @docs lerpOf, move, moveX, moveY, place, placeX, placeY
 
 # Create and Display Items
-@docs emptyItem, toItem, fromItem
+@docs emptyItem, makeItem, toItem, fromItem, fromItemStyled
 
 -}
 
@@ -133,15 +136,15 @@ emptyHtml_ =
   Html.div [ Attrs.style [ (,) "display" "hidden", (,) "width" "0", (,) "height" "0" ] ] [ ]
 
 
-itemToHtml_ : Item -> Html.Html
-itemToHtml_ item =
+itemToHtml_ : List (String, String) -> Item -> Html.Html
+itemToHtml_ styles item =
   measure_ item
-  |> \{w, h} -> htmlContainer_ w h [ item.elem.html ]
+  |> \{w, h} -> htmlContainer_ w h styles [ item.elem.html ]
 
 
-htmlContainer_ : Int -> Int -> List Html.Html -> Html.Html
-htmlContainer_ w h htmls =
-  Html.div [ itemContainerStyle_ (w, h) |> Attrs.style ] htmls
+htmlContainer_ : Int -> Int -> List (String, String) -> List Html.Html -> Html.Html
+htmlContainer_ w h styles htmls =
+  Html.div [ (itemContainerStyle_ (w, h)) ++ styles |> Attrs.style ] htmls
 
 
 {-| An item, which represents an Elm Element with a position and a handle. -}
@@ -281,11 +284,22 @@ toItem w h htm =
   { elem = nodeElement_ w h htm, x = 0, u = 0, y = 0, v = 0 }
 
 
-{-| Get the Graphics Element from an Item. Note that this will get the original Element back,
-unaffected by any positioning done using placement and group operations. To produce Graphics
-Elements with finished layouts, refer to the flatten functions. -}
-fromItem : Item -> Html
-fromItem = .elem >> .html
+{-| Create an item using an Html constructor. Nice for when you largely rely on Layout over Html,
+using Html just for the end controls. -}
+makeItem : Int -> Int -> (List Html.Attribute -> List Html.Html -> Html.Html) -> List Html.Attribute -> List Html.Html -> Item
+makeItem w h ctor attrs htmls =
+  toItem w h (ctor attrs htmls)
+
+
+{-| Convert an Item to Html by placing it inside of a sized container. -}
+fromItem : Item -> Html.Html
+fromItem = itemToHtml_ []
+
+
+{-| The same as fromItem, but styles the sized container with a given arbitrary list of CSS
+properties. -}
+fromItemStyled : List (String, String) -> Item -> Html.Html
+fromItemStyled = itemToHtml_
 
 
 {-| Get the size of an Item. -}
@@ -812,8 +826,8 @@ computed grp =
   Group_ (Array.indexedMap (grpxdcr_ grp) (grparray_ grp), always identity, grpw''_ grp, grph''_ grp)
 
 
-produce' : Bounds -> Bounds -> Group -> (Group, Item)
-produce' inner outer grp =
+produce' : Bounds -> Bounds -> List (String, String) -> Group -> (Group, Item)
+produce' inner outer styles grp =
   let
     grp' = computed grp
 
@@ -839,7 +853,7 @@ produce' inner outer grp =
       |> \(ls', bb_) -> clampedOuterBounds outer bb_
       |> \bb2 -> boundsSize bb2
       |> \(w', h') -> List.map (\f -> f bb2) ls'
-      |> htmlContainer_ w' h'
+      |> htmlContainer_ w' h' styles
       |> toItem w' h'
       |> \item'' -> (bb2, item'')
 
@@ -855,7 +869,7 @@ bounding box. This can result in the handle being placed outside of the group, b
 positioning. For example, I may want to grab something at (-5, -5), so I can position it's top left
 corner relative to some outer box with (5, 5) padding. -}
 flatten : Group -> Item
-flatten = produce' AutoBB AutoBB >> snd
+flatten = flattenStyled []
 
 
 {-| Flatten a group using an exact bound. If this is specified to be autoBounds, then the following
@@ -866,7 +880,7 @@ equivalency holds:
 Otherwise, the items in the group are positioned in the resulting item relative to the top left corner of the bounds and
 the resulting item shall have the exact size of the given bounds. -}
 flattenTo : Bounds -> Group -> Item
-flattenTo exact = flattenWithinOutTo exact exact
+flattenTo = flattenToStyled []
 
 
 {-| Flatten a group using only an outer bound, which is equivalent to
@@ -874,7 +888,7 @@ flattenTo exact = flattenWithinOutTo exact exact
     flattenWithinOutTo autoBounds outer
 -}
 flattenWithin : Bounds -> Group -> Item
-flattenWithin = flattenWithinOutTo AutoBB
+flattenWithin = flattenWithinStyled []
 
 
 {-| Flatten a group using only an inner bound, which is equivalent to
@@ -882,14 +896,37 @@ flattenWithin = flattenWithinOutTo AutoBB
     flattenWithinOutTo outer autoBounds
 -}
 flattenOutTo : Bounds -> Group -> Item
-flattenOutTo = flip flattenWithinOutTo AutoBB
+flattenOutTo = flattenOutToStyled []
 
 
-{-| Flatten a group using an inner and an outer bound to clamp the size of the resulting item.
--}
+{-| Flatten a group using an inner and an outer bound to clamp the size of the resulting item. -}
 flattenWithinOutTo : Bounds -> Bounds -> Group -> Item
-flattenWithinOutTo inner outer = produce' inner outer >> snd
+flattenWithinOutTo = flattenWithinOutToStyled []
 
+
+{-| Same as flatten, but applies the given additional styles to the container. -}
+flattenStyled : List (String, String) -> Group -> Item
+flattenStyled styles = produce' AutoBB AutoBB styles >> snd
+
+
+{-| Same as flattenTo, but applies the given additional styles to the container. -}
+flattenToStyled : List (String, String) -> Bounds -> Group -> Item
+flattenToStyled styles exact = flattenWithinOutToStyled styles exact exact
+
+
+{-| Same as flattenWithin, but applies the given additional styles to the container. -}
+flattenWithinStyled : List (String, String) -> Bounds -> Group -> Item
+flattenWithinStyled styles = flattenWithinOutToStyled styles AutoBB
+
+
+{-| Same as flattenOutTo, but applies the given additional styles to the container. -}
+flattenOutToStyled : List (String, String) -> Bounds -> Group -> Item
+flattenOutToStyled styles = flip (flattenWithinOutToStyled styles) AutoBB
+
+
+{-| Same as flattenWithinOutTo, but applies the given additional styles to the container. -}
+flattenWithinOutToStyled : List (String, String) -> Bounds -> Bounds -> Group -> Item
+flattenWithinOutToStyled styles inner outer = produce' inner outer styles >> snd
 
 
 -- here are a bunch of ugly utility functions that need cleaning someday.

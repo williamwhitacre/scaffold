@@ -1,11 +1,14 @@
 {- Example using Resource for mapping data to views recursively. -}
 
+
 import Scaffold.App as App
 import Scaffold.Machine as Machine exposing (Machine)
 import Scaffold.Resource as Res exposing (Resource, ResourceRef, UserTask, ResourceTask)
 
+
 -- Just for show
 import Graphics.Element
+
 
 import Html exposing (Html, div, span, button, text)
 import Html.Events exposing (onClick)
