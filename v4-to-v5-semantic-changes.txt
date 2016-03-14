@@ -12,6 +12,7 @@ avoid exploding the semantic version number.
    - Example 3 (Resources) should be fully working and demonstrable.
 
 
+ DONE
  - Replace the Scaffold.Layout's usage of DEPRECIATED Elm Graphics.Element API with Html, as given
    in the examples, but of course wrapped up in the Scaffold.Layout semantics and layout engine.
    Do not be tempted to use Html.Lazy while doing this. A number of bugs were discovered in the

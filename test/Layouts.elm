@@ -207,13 +207,13 @@ renderBad styleAttrib address res =
 -- argument given to `Res.flattenDict` for reducing a `ViewResource` in to a single Html element.
 -- see below in render for the actual usage.
 renderGroup : RenderContext -> Signal.Address (List Action) -> List String -> Dict String ViewResource -> Html
-renderGroup renderContext address rpath resources =
+renderGroup renderContext address path resources =
   let
-    htmlChildren = Dict.foldr (\k r' -> (::) (render renderContext address (rpath ++ [k]) r')) []
+    htmlChildren = Dict.foldr (\k r' -> (::) (render renderContext address (path ++ [k]) r')) []
 
     htmlGroup children =
       [ Html.button
-          [ Html.Events.onClick address [ NewItem rpath ] ]
+          [ Html.Events.onClick address [ NewItem path ] ]
           [ Html.text "New Item" ]
       ] ++ children
 
@@ -225,8 +225,8 @@ renderGroup renderContext address rpath resources =
         [ Html.h4
             [ styleItem 16 ["arial"] False True ]
             [ Html.abbr
-                [ Html.Attributes.title (pathText rpath) ]
-                [ List.head rpath
+                [ Html.Attributes.title (pathText path) ]
+                [ List.head (List.reverse path)
                   |> Maybe.map (flip (++) "/")
                   |> Maybe.withDefault "/"
                   |> Html.text

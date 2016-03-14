@@ -36,7 +36,7 @@ module Scaffold.Layout
   itemHorizontalRule, itemRule, itemVerticalRule, ruleBetween, ruleCenter, snapToRule,
   towardsRule, towardsRuleRelative, verticalRule, verticalRuleBetween, verticalRuleCentered,
 
-  appendGroup, group, groupAt, groupAtBefore, groupElements, groupFromArray, groupFromDict,
+  appendGroup, group, groupAt, groupAtBefore, groupFromArray, groupFromDict,
   groupSize, prependGroup, computed, butBefore, butBeforeAt, butBeforeSlice, thenDo, thenDoAt,
   thenDoSlice, flatten, flattenOutTo, flattenTo, flattenWithin, flattenWithinOutTo,
 
@@ -64,7 +64,7 @@ module Scaffold.Layout
 @docs adjustedRule, horizontalRule, horizontalRuleBetween, horizontalRuleCentered, itemHorizontalRule, itemRule, itemVerticalRule, ruleBetween, ruleCenter, snapToRule, towardsRule, towardsRuleRelative, verticalRule, verticalRuleBetween, verticalRuleCentered
 
 # Grouping and Group Operations
-@docs appendGroup, group, groupAt, groupAtBefore, groupElements, groupFromArray, groupFromDict, groupSize, prependGroup, computed, butBefore, butBeforeAt, butBeforeSlice, thenDo, thenDoAt, thenDoSlice, flatten, flattenOutTo, flattenTo, flattenWithin, flattenWithinOutTo
+@docs appendGroup, group, groupAt, groupAtBefore, groupFromArray, groupFromDict, groupSize, prependGroup, computed, butBefore, butBeforeAt, butBeforeSlice, thenDo, thenDoAt, thenDoSlice, flatten, flattenOutTo, flattenTo, flattenWithin, flattenWithinOutTo
 
 # Group Spacing and Distribution.
 @docs spacedBetween, spacedBy, regularly, vertically, horizontally
@@ -86,26 +86,67 @@ module Scaffold.Layout
 
 -}
 
-import Graphics.Element
-import Graphics.Input
-import Graphics.Input.Field
-import Html
-import Svg
-import Svg.Attributes
-import Text exposing (Text)
-import Color exposing (Color)
+import Html exposing (Html)
+import Html.Attributes as Attrs
+
+import Json.Encode
 
 import Array exposing (Array)
 import Dict exposing (Dict)
 
 
---import Trampoline
---import Debug
+type alias Element =
+  { html : Html
+  , w : Int, h : Int
+  }
+
+
+nodeElement_ : Int -> Int -> Html -> Element
+nodeElement_ w h html =
+  { html = html
+  , w = w, h = h
+  }
+
+
+inPixels_ : Int -> String
+inPixels_ = toString >> flip (++) "px"
+
+
+itemMetricStyle_ : Int -> Int -> Int -> Int -> List (String, String)
+itemMetricStyle_ x0 y0 w h =
+  [ (,) "position" "absolute"
+  , (,) "left"     (inPixels_ x0)
+  , (,) "top"      (inPixels_ y0)
+  , (,) "width"    (inPixels_ w)
+  , (,) "height"   (inPixels_ h)
+  ]
+
+itemContainerStyle_ : (Int, Int) -> List (String, String)
+itemContainerStyle_ (w, h) =
+  [ (,) "position" "relative"
+  , (,) "width"  (inPixels_ w)
+  , (,) "height" (inPixels_ h)
+  ]
+
+emptyHtml_ : Html.Html
+emptyHtml_ =
+  Html.div [ Attrs.style [ (,) "display" "hidden", (,) "width" "0", (,) "height" "0" ] ] [ ]
+
+
+itemToHtml_ : Item -> Html.Html
+itemToHtml_ item =
+  measure_ item
+  |> \{w, h} -> htmlContainer_ w h [ item.elem.html ]
+
+
+htmlContainer_ : Int -> Int -> List Html.Html -> Html.Html
+htmlContainer_ w h htmls =
+  Html.div [ itemContainerStyle_ (w, h) |> Attrs.style ] htmls
 
 
 {-| An item, which represents an Elm Element with a position and a handle. -}
 type alias Item =
-  { elem : Graphics.Element.Element
+  { elem : Element
   , x : Int, u : Int
   , y : Int, v : Int
   }
@@ -231,20 +272,20 @@ clampedInnerBounds = flip clampedBounds AutoBB
 
 {-| An empty layout item. -}
 emptyItem : Item
-emptyItem = toItem Graphics.Element.empty
+emptyItem = toItem 0 0 emptyHtml_
 
 
-{-| Convert a Graphics Element to an Item -}
-toItem : Graphics.Element.Element -> Item
-toItem elem =
-  { elem = elem, x = 0, u = 0, y = 0, v = 0 }
+{-| Create an item from Html -}
+toItem : Int -> Int -> Html -> Item
+toItem w h htm =
+  { elem = nodeElement_ w h htm, x = 0, u = 0, y = 0, v = 0 }
 
 
 {-| Get the Graphics Element from an Item. Note that this will get the original Element back,
 unaffected by any positioning done using placement and group operations. To produce Graphics
 Elements with finished layouts, refer to the flatten functions. -}
-fromItem : Item -> Graphics.Element.Element
-fromItem = .elem
+fromItem : Item -> Html
+fromItem = .elem >> .html
 
 
 {-| Get the size of an Item. -}
@@ -484,13 +525,6 @@ towardsRuleRelative rule t item =
   case rule of
     Vertical x' -> { item | x = floor (lerp_ (toFloat item.x) (toFloat x') t) }
     Horizontal y' -> { item | y = floor (lerp_ (toFloat item.y) (toFloat y') t) }
-
-
-{-| This is a shortcut for grouping graphics elements, which is very useful for compositing graphics
-elements such as images directly for layering effects. -}
-groupElements : List Graphics.Element.Element -> Group
-groupElements elems =
-  List.map toItem elems |> group
 
 
 groupByFold ffold items =
@@ -783,45 +817,36 @@ produce' inner outer grp =
   let
     grp' = computed grp
 
-    container' item (ls, bb) =
-      let
-        metric = measure_ item
 
-        bound = defBounds metric.x0 metric.y0 metric.x1 metric.y1
-        makeIt = makeContainer item
-
-      in
-        (makeIt :: ls, clampedInnerBounds bound bb)
+    positionFold item (ls, bb) =
+      let {x0, y0, x1, y1} = measure_ item in
+        (makePositioned item :: ls, clampedInnerBounds (defBounds x0 y0 x1 y1) bb)
 
 
-    makeContainer item bound =
-      let
-        { x, y, x0, y0 } = measure_ item
-      in
+    makePositioned item bound =
+      let {x0, y0, w, h} = measure_ item in
         case (boundsLower bound, boundsSize bound) of
           (Just (x0', y0'), (w', h')) ->
-            let
-              abs' x y = (Graphics.Element.absolute x, Graphics.Element.absolute y)
-              offset = abs' (x0 - x0') (y0 - y0')
+            Html.div
+              [ itemMetricStyle_ (x0 - x0') (y0 - y0') w h |> Attrs.style ]
+              [ item.elem.html ]
 
-            in
-              Graphics.Element.container w' h'
-                (uncurry Graphics.Element.topLeftAt offset)
-                item.elem
+          _ -> emptyHtml_
 
-          _ -> Graphics.Element.empty
 
-    (bb', elem) =
-      Array.foldl container' ([], inner) (grparray_ grp') -- invert - inward
+    (bb', item') =
+      Array.foldl positionFold ([], inner) (grparray_ grp') -- invert - inward
       |> \(ls', bb_) -> clampedOuterBounds outer bb_
-      |> \bb2 -> List.map (\f -> f bb2) ls'
-      |> Graphics.Element.flow Graphics.Element.inward
-      |> \elem -> (bb2, elem)
+      |> \bb2 -> boundsSize bb2
+      |> \(w', h') -> List.map (\f -> f bb2) ls'
+      |> htmlContainer_ w' h'
+      |> toItem w' h'
+      |> \item'' -> (bb2, item'')
 
 
     (x0', y0') = Maybe.withDefault (0, 0) (boundsLower bb')
   in
-    (grp', toItem elem |> grabItem -x0' -y0')
+    (grp', item' |> grabItem -x0' -y0')
 
 
 {-| Flatten a group using automatic bounds for the inner and outer bounds. This will produce the
@@ -896,10 +921,7 @@ clamp_ lower upper = min upper >> max lower
 -- measure an item
 measure_ : Item -> ItemMetric_
 measure_ {elem, x, y, u, v} =
-  let
-    (w, h) = Graphics.Element.sizeOf elem
-
-  in
+  elem |> \{w, h} ->
     { w = w, h = h
     , x = x, y = y
     , u = u, v = v
@@ -914,7 +936,11 @@ lerp_ x xp t = (t * xp) + (x - t * x)
 
 clerp_ : Float -> Float -> Float -> Float
 clerp_ x xp c =
-  if c < 0 then clerp_ x xp -c
-    else if x == xp then x
-    else if x < xp then min (x + c) xp
-    else max (x - c) xp
+  if c < 0 then
+    clerp_ x xp -c
+  else if x == xp then
+    x
+  else if x < xp then
+    min (x + c) xp
+  else
+    max (x - c) xp
