@@ -27,9 +27,6 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 --}
 
-
--- TODO: implement comprehend' _and_ comprehendImpl_r
-
 module Scaffold.Resource
 
   (Resource,
@@ -152,6 +149,8 @@ For use with `merge` and `mergeMany`.
 @docs toProgram
 
 -}
+
+-- TODO: determine cause of the path reversal strangeness in the example.
 
 import Scaffold.App exposing (..)
 import Scaffold.Error as Error
@@ -420,9 +419,9 @@ deltaTask optask =
 {-| Convert a `UserTask euser v` in to an `App.ProgramTask bad a` -}
 toProgramTask : (Error.Error euser -> List a) -> (Resource euser v -> List a) -> UserTask euser v -> ProgramTask bad a
 toProgramTask errorActions resourceActions =
-  programAgent
-    (resourceActions >> programAgentSuccess)
-    (errorActions >> programAgentSuccess)
+  agent
+    (resourceActions >> agentSuccess)
+    (errorActions >> agentSuccess)
 
 
 {-| The equivalent of therefore for ResourceTasks. This allows you to map fetched data to multiple
@@ -440,13 +439,13 @@ task, such that global context for the resource's location is available if desir
 Note that you may specify a prefix path to the existing one to provide additional context in large
 resource group structures.
 -}
-comprehend' : (List String -> v -> v') -> ResourceTask euser v -> ResourceTask euser v'
+comprehend' : (ResourcePath -> v -> v') -> ResourceTask euser v -> ResourceTask euser v'
 comprehend' xdcr optask =
   optask `andThen` (\ref -> { ref | resource = therefore' xdcr ref.path ref.resource } |> Task.succeed)
 
 
 -- adapter for therefore implementation
-comprehendImpl_r : (List String -> v -> v') -> List String -> ResourceTask euser v -> ResourceTask euser v'
+comprehendImpl_r : (ResourcePath -> v -> v') -> ResourcePath -> ResourceTask euser v -> ResourceTask euser v'
 comprehendImpl_r rxdcr rpath optask =
   optask `andThen` (\ref -> { ref | resource = thereforeImpl_r rxdcr (List.reverse ref.path ++ rpath) ref.resource } |> Task.succeed)
 
@@ -463,7 +462,7 @@ interpret f optask =
 {-| Like `interpret`, but the prefix path of the resource is passed to the given function, and the
 user can optionally specify their own prefix path. `interpret'` is to `interpret` what `comprehend'`
 is to `comprehend`. -}
-interpret' : (List String -> Resource euser v -> Resource euser v') -> List String -> ResourceTask euser v -> ResourceTask euser v'
+interpret' : (ResourcePath -> Resource euser v -> Resource euser v') -> ResourcePath -> ResourceTask euser v -> ResourceTask euser v'
 interpret' f prepath optask =
   optask `andThen` (\ref -> { ref | resource = f (prepath ++ ref.path) ref.resource } |> Task.succeed)
 
@@ -486,7 +485,7 @@ collapse f res =
   collapse_ f [] res
 
 
-collapse_ : (List (ResourcePath, Resource euser v) -> Resource euser v) -> List String -> Resource euser v -> Resource euser v
+collapse_ : (List (ResourcePath, Resource euser v) -> Resource euser v) -> ResourcePath -> Resource euser v -> Resource euser v
 collapse_ frecurse rpath res =
   let
     cfold key res ls = (List.reverse rpath, collapse_ frecurse (key :: rpath) res) :: ls
@@ -562,7 +561,7 @@ therefore xdcr =
 
 
 {-| `therefore`, but which includes the current path as the first argument. -}
-therefore' : (List String -> v -> v') -> List String -> Resource euser v -> Resource euser v'
+therefore' : (ResourcePath -> v -> v') -> ResourcePath -> Resource euser v -> Resource euser v'
 therefore' xdcr path =
   thereforeImpl_r (List.reverse >> xdcr) (List.reverse path)
 
@@ -574,7 +573,7 @@ therefore' xdcr path =
 -- in the unlikely case that we have very large deltas which further consist of very deep trees.
 -- Since this scenario is highly unlikely and can easily be avoided by design from an engineering
 -- standpoint, that theoretical weakness does not have a substantial concrete cost.
-thereforeImpl_r : (List String -> v -> v') -> List String -> Resource euser v -> Resource euser v'
+thereforeImpl_r : (ResourcePath -> v -> v') -> ResourcePath -> Resource euser v -> Resource euser v'
 thereforeImpl_r rxdcr rpath res =
   let
     stepIn_ key = thereforeImpl_r rxdcr (key :: rpath)
@@ -603,7 +602,7 @@ within = therefore
 
 
 {-| Manipulate an item at the given path, or else do nothing if the path does not exist. -}
-atPath : (Resource euser v -> Resource euser v) -> List String -> Resource euser v -> Resource euser v
+atPath : (Resource euser v -> Resource euser v) -> ResourcePath -> Resource euser v -> Resource euser v
 atPath operation path res =
   case path of
     [ ] -> operation res
@@ -621,14 +620,14 @@ atPath operation path res =
     atPath (always unknownResource) path res == deletePath path res
 
 -}
-deletePath : List String -> Resource euser v -> Resource euser v
+deletePath : ResourcePath -> Resource euser v -> Resource euser v
 deletePath = atPath (always Unknown)
 
 
 {-| Put a resource in to a group resource at the given path. In the case that something is already
 there, use the `choice` function to determine which should be used. See the `choose*` family for some
 built-in functions. -}
-putPath : (Resource euser v -> Resource euser v -> Resource euser v) -> List String -> Resource euser v -> Resource euser v -> Resource euser v
+putPath : (Resource euser v -> Resource euser v -> Resource euser v) -> ResourcePath -> Resource euser v -> Resource euser v -> Resource euser v
 putPath choice path res' res =
   prefixPath path res'
   |> \res'' -> merge choice res'' res
@@ -636,21 +635,21 @@ putPath choice path res' res =
 
 {-| Equivalent to `putPath chooseLeft`, this is a simple write which will always blindly overwrite the
 current resource at the given path. -}
-writePath : List String -> Resource euser v -> Resource euser v -> Resource euser v
+writePath : ResourcePath -> Resource euser v -> Resource euser v -> Resource euser v
 writePath = putPath chooseLeft
 
 
 {-| Move the resource at a given path `path` in the resource group structure to a target path `path'`. -}
-movePath : (Resource euser v -> Resource euser v -> Resource euser v) -> List String -> List String -> Resource euser v -> Resource euser v
+movePath : (Resource euser v -> Resource euser v -> Resource euser v) -> ResourcePath -> ResourcePath -> Resource euser v -> Resource euser v
 movePath = cpPathImpl_ True
 
 
 {-| Copy the resource at a given path `path` in the resource group structure to a target path `path'`. -}
-copyPath : (Resource euser v -> Resource euser v -> Resource euser v) -> List String -> List String -> Resource euser v -> Resource euser v
+copyPath : (Resource euser v -> Resource euser v -> Resource euser v) -> ResourcePath -> ResourcePath -> Resource euser v -> Resource euser v
 copyPath = cpPathImpl_ False
 
 
-cpPathImpl_ : Bool -> (Resource euser v -> Resource euser v -> Resource euser v) -> List String -> List String -> Resource euser v -> Resource euser v
+cpPathImpl_ : Bool -> (Resource euser v -> Resource euser v -> Resource euser v) -> ResourcePath -> ResourcePath -> Resource euser v -> Resource euser v
 cpPathImpl_ bDoMove choice path path' res =
   if path /= path' then
     putPath choice path' (getPath path res) res
@@ -684,7 +683,7 @@ whether concrete or a group with the given path. Thus, creating a resource path 
 another at ["foo", "baz"] would result in two resources that can be merged without conflicts
 guaranteed because their contents are in the `foo -> bar -> ...` and `foo -> baz -> ...` subtries
 respectively. -}
-prefixPath : List String -> Resource euser v -> Resource euser v
+prefixPath : ResourcePath -> Resource euser v -> Resource euser v
 prefixPath path res =
   List.foldr
     (\element res' -> Group (groupPut_ element res' groupNew_))
@@ -734,7 +733,7 @@ does not show knowledge at the fringe (i.e., the fringe is unknown at the last k
 the path), but may also return voidResource to a path which is known not to exist. For example,
 if foo is a resource, then foo/bar cannot be a valid path because foo is not a collection. Pending
 will be given in the case that an operation is pending. -}
-getPath : List String -> Resource euser v -> Resource euser v
+getPath : ResourcePath -> Resource euser v -> Resource euser v
 getPath path res =
   case path of
     [ ] -> res
