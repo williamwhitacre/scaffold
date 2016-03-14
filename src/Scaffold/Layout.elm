@@ -54,7 +54,7 @@ module Scaffold.Layout
 
   lerpOf, move, moveX, moveY, place, placeX, placeY,
 
-  emptyItem, makeItem, toItem, fromItem, fromItemStyled)
+  emptyItem, makeItem, iconItem, toItem, fromItem, fromItemStyled)
 
   where
 
@@ -85,12 +85,16 @@ module Scaffold.Layout
 @docs lerpOf, move, moveX, moveY, place, placeX, placeY
 
 # Create and Display Items
-@docs emptyItem, makeItem, toItem, fromItem, fromItemStyled
+@docs emptyItem, makeItem, iconItem, toItem, fromItem, fromItemStyled
 
 -}
 
 import Html exposing (Html)
 import Html.Attributes as Attrs
+
+import Svg
+import Svg.Attributes as SvgAttrs
+import Color
 
 import Json.Encode
 
@@ -282,6 +286,22 @@ emptyItem = toItem 0 0 emptyHtml_
 toItem : Int -> Int -> Html -> Item
 toItem w h htm =
   { elem = nodeElement_ w h htm, x = 0, u = 0, y = 0, v = 0 }
+
+
+{-| Create an item using an SVG icon function. This is intended primarily for use with the material
+icon set, but if others follow suit with the same API for different icon sets, this will work just
+as well. Note that the size and color arguments are intentionally flipped. This is for currying
+purposes; it is much less likely for the size of an icon to change than the color. -}
+iconItem : (Color.Color -> Int -> Svg.Svg) -> Int -> Color.Color -> Item
+iconItem fsvg size' color' =
+  Svg.svg
+    [ SvgAttrs.width (toString size')
+    , SvgAttrs.height (toString size')
+    , SvgAttrs.viewBox ("0 0 " ++ (toString size') ++ " " ++ (toString size'))
+    ]
+    [ fsvg color' size'
+    ]
+  |> toItem size' size'
 
 
 {-| Create an item using an Html constructor. Nice for when you largely rely on Layout over Html,
