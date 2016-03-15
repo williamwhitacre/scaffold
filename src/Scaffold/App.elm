@@ -33,7 +33,7 @@ module Scaffold.App
   (AgentStatus, ComputedResult, ComputedSuccess, ProgramInput, ProgramOutput, ProgramSnapshot,
   ProgramConnector, ProgramTask, TaskDispatchment, UpdatedModel, ViewOutput,
 
-  defProgram, defProgram',
+  defProgram, defProgram', defStagedProgram,
 
   run, runAnd, defSequenceInputs, defLazySequenceInputs, sink,
 
@@ -62,7 +62,7 @@ module Scaffold.App
 
     myProgramOutput : ProgramOutput MyAction MyModel Layout.Item Error
     myProgramOutput =
-      defProgram' myPresent myStage myUpdate myInitialModel
+      defStagedProgram myPresent myStage myUpdate myInitialModel
       |> defSequenceInputs
         [ someVeryImportantBrowserEnvironmentInput
         , someOtherOutsideSignal
@@ -87,7 +87,7 @@ module Scaffold.App
 @docs AgentStatus, ComputedResult, ComputedSuccess, ProgramInput, ProgramOutput, ProgramSnapshot, ProgramConnector, ProgramTask, TaskDispatchment, UpdatedModel, ViewOutput
 
 # Define Programs
-@docs defProgram, defProgram'
+@docs defProgram, defProgram', defStagedProgram
 
 # Run Programs
 @docs run, runAnd, defLazySequenceInputs, defSequenceInputs, sink
@@ -383,6 +383,16 @@ defProgram' present stage update model =
   , update = update
   , stage = stage
   }
+
+
+{-| Clearer synonym for defProgram'. -}
+defStagedProgram
+  :  (Signal.Address (List a) -> Time -> b -> ViewOutput a c bad)
+  -> (Signal.Address (List a) -> Time -> b -> UpdatedModel a b bad)
+  -> (a -> Time -> b -> UpdatedModel a b bad)
+  -> b
+  -> ProgramInput a b c bad
+defStagedProgram = defProgram'
 
 
 {-| Forward applicative alternative to withSequenceInputs. -}
