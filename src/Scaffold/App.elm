@@ -37,7 +37,7 @@ module Scaffold.App
 
   run, runAnd, defSingletonInputs, defSequenceInputs, defLazySequenceInputs, sink,
 
-  updated, presented, withTasks, withDispatchment, withChildren, viewOutputTask,
+  updated, presented, withTasks, withDispatchment, withDispatchments, withChildren, viewOutputTask,
 
   actionTask, actionTaskAsync, errorTask, computeTask, computedSuccess, computedSuccessAsync,
   noActions, nilTask,
@@ -93,7 +93,7 @@ module Scaffold.App
 @docs run, runAnd, defSingletonInputs, defSequenceInputs, defLazySequenceInputs, sink
 
 # UpdatedModel and ViewOutput Manipulation
-@docs updated, presented, withTasks, withDispatchment, withChildren, viewOutputTask
+@docs updated, presented, withTasks, withDispatchment, withDispatchments, withChildren, viewOutputTask
 
 # Dispatch Actions and Errors
 @docs actionTask, actionTaskAsync, errorTask, computeTask, computedSuccess, computedSuccessAsync, noActions, nilTask
@@ -487,6 +487,15 @@ withDispatchment dispatchment out' =
   { out'
   | dispatchment = combineDispatchments out'.dispatchment dispatchment
   }
+
+
+{-| `withDispatchment` for multiple dispatchments. -}
+withDispatchments
+  : List (TaskDispatchment bad a)
+  -> { anything | dispatchment : TaskDispatchment bad a }
+  -> { anything | dispatchment : TaskDispatchment bad a }
+withDispatchments dispatchments out' =
+  List.foldl withDispatchment out' dispatchments
 
 
 {-| This takes a list of UpdatedModel or ViewOutput instances, and appends each one to the
