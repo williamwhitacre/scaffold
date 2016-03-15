@@ -877,7 +877,7 @@ produce' inner outer styles grp =
 
 
     (bb', item') =
-      Array.foldl positionFold ([], inner) (grparray_ grp') -- invert - inward
+      Array.foldr positionFold ([], inner) (grparray_ grp') -- invert - inward
       |> \(ls', bb_) -> clampedOuterBounds outer bb_
       |> \bb2 -> boundsSize bb2
       |> \(w', h') -> List.map (\f -> f bb2) ls'
