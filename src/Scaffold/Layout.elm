@@ -54,7 +54,7 @@ module Scaffold.Layout
 
   lerpOf, move, moveX, moveY, place, placeX, placeY,
 
-  emptyItem, makeItem, iconItem, toItem, fromItem, fromItemStyled)
+  emptyItem, makeItem, makeItemStyled, iconItem, toItem, fromItem, fromItemStyled)
 
   where
 
@@ -85,7 +85,7 @@ module Scaffold.Layout
 @docs lerpOf, move, moveX, moveY, place, placeX, placeY
 
 # Create and Display Items
-@docs emptyItem, makeItem, iconItem, toItem, fromItem, fromItemStyled
+@docs emptyItem, makeItem, makeItemStyled, iconItem, toItem, fromItem, fromItemStyled
 
 -}
 
@@ -309,6 +309,14 @@ using Html just for the end controls. -}
 makeItem : Int -> Int -> (List Html.Attribute -> List Html.Html -> Html.Html) -> List Html.Attribute -> List Html.Html -> Item
 makeItem w h ctor attrs htmls =
   toItem w h (ctor attrs htmls)
+
+
+{-| Create an item using an Html constructor, but append a style attribute to the end of the
+attributes list with the given styles. Useful in the case that you want to forward declare the
+style of a whole bunch of items' Html contents with a partial function.  -}
+makeItemStyled : List (String, String) -> Int -> Int -> (List Html.Attribute -> List Html.Html -> Html.Html) -> List Html.Attribute -> List Html.Html -> Item
+makeItemStyled styles w h ctor attrs =
+  makeItem w h ctor (attrs ++ [ Attrs.style styles ])
 
 
 {-| Convert an Item to Html by placing it inside of a sized container. -}
