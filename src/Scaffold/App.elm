@@ -35,7 +35,7 @@ module Scaffold.App
 
   defProgram, defProgram', defStagedProgram, forwardSingleton,
 
-  run, runAnd, defSequenceInputs, defLazySequenceInputs, sink,
+  run, runAnd, defSingletonInputs, defSequenceInputs, defLazySequenceInputs, sink,
 
   updated, presented, withTasks, withDispatchment, withChildren, viewOutputTask,
 
@@ -90,7 +90,7 @@ module Scaffold.App
 @docs defProgram, defProgram', defStagedProgram, forwardSingleton
 
 # Run Programs
-@docs run, runAnd, defLazySequenceInputs, defSequenceInputs, sink
+@docs run, runAnd, defSingletonInputs, defSequenceInputs, defLazySequenceInputs, sink
 
 # UpdatedModel and ViewOutput Manipulation
 @docs updated, presented, withTasks, withDispatchment, withChildren, viewOutputTask
@@ -396,7 +396,7 @@ defStagedProgram
 defStagedProgram = defProgram'
 
 
-{-| Forward applicative alternative to withSequenceInputs. -}
+{-| Define a list of action sequence signal inputs for a given ProgramInput. -}
 defSequenceInputs : List (Signal (List a)) -> ProgramInput a b c bad -> ProgramInput a b c bad
 defSequenceInputs sigs inR =
   { inR
@@ -404,7 +404,14 @@ defSequenceInputs sigs inR =
   }
 
 
-{-| Forward applicative alternative to withLazySequenceInputs. -}
+{-| Define a list of action singleton signal inputs for a given ProgramInput. -}
+defSingletonInputs : List (Signal a) -> ProgramInput a b c bad -> ProgramInput a b c bad
+defSingletonInputs sigs =
+  defSequenceInputs (List.map (Signal.map (flip (::) [])) sigs)
+
+
+{-| Define a list of action sequence signal inputs for a given ProgramInput, where the sequences are
+given as lazy lists via Lazy.List. -}
 defLazySequenceInputs : List (Signal (LazyList a)) -> ProgramInput a b c bad -> ProgramInput a b c bad
 defLazySequenceInputs sigs inR =
   { inR
