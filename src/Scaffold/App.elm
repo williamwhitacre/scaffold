@@ -33,7 +33,7 @@ module Scaffold.App
   (AgentStatus, ComputedResult, ComputedSuccess, ProgramInput, ProgramOutput, ProgramSnapshot,
   ProgramConnector, ProgramTask, TaskDispatchment, UpdatedModel, ViewOutput,
 
-  defProgram, defProgram', defStagedProgram,
+  defProgram, defProgram', defStagedProgram, forwardSingleton,
 
   run, runAnd, defSequenceInputs, defLazySequenceInputs, sink,
 
@@ -87,7 +87,7 @@ module Scaffold.App
 @docs AgentStatus, ComputedResult, ComputedSuccess, ProgramInput, ProgramOutput, ProgramSnapshot, ProgramConnector, ProgramTask, TaskDispatchment, UpdatedModel, ViewOutput
 
 # Define Programs
-@docs defProgram, defProgram', defStagedProgram
+@docs defProgram, defProgram', defStagedProgram, forwardSingleton
 
 # Run Programs
 @docs run, runAnd, defLazySequenceInputs, defSequenceInputs, sink
@@ -109,6 +109,7 @@ module Scaffold.App
 
 # Program Task Agents
 @docs agentSuccess, agentFailure, agent, successAgent, failureAgent, binaryAgent, blindAgent, nilAgent, resultAgent, ignoreError
+
 
 -}
 
@@ -916,3 +917,9 @@ it'sErrorConnector handler output =
 {-| Get the program view output. -}
 outputView : ProgramOutput a b c bad -> Signal c
 outputView = .view'
+
+
+{-| Sometimes you don't need the fanciness of an action list address. In that case, it's cool to
+not have to write your own forwarding address. -}
+forwardSingleton : Signal.Address (List a) -> Signal.Address a
+forwardSingleton = flip Signal.forwardTo (flip (::) [])
