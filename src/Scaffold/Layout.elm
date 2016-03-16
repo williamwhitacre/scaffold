@@ -769,7 +769,7 @@ groupWhichTransducer_ len i' f i x =
 
 groupSliceTransducer_ len i' j' f i x =
   sliceIndex_ len i'
-  |> \i's -> sliceIndex_ len i'
+  |> \i's -> sliceIndex_ len j'
   |> \j's -> sliceIndex_ len i
   |> \is_ -> if is_ >= i's && is_ < j's then f x else x
 
