@@ -137,7 +137,7 @@ itemContainerStyle_ (w, h) =
 
 emptyHtml_ : Html.Html
 emptyHtml_ =
-  Html.div [ Attrs.style [ (,) "display" "hidden", (,) "width" "0", (,) "height" "0" ] ] [ ]
+  Html.div [ Attrs.style [ ("display", "none") ] ] [ ]
 
 
 itemToHtml_ : List (String, String) -> Item -> Html.Html
