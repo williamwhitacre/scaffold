@@ -316,7 +316,7 @@ attributes list with the given styles. Useful in the case that you want to forwa
 style of a whole bunch of items' Html contents with a partial function.  -}
 makeItemStyled : List (String, String) -> Int -> Int -> (List Html.Attribute -> List Html.Html -> Html.Html) -> List Html.Attribute -> List Html.Html -> Item
 makeItemStyled styles w h ctor attrs =
-  makeItem w h ctor (attrs ++ [ Attrs.style styles ])
+  makeItem w h ctor (attrs ++ [ Attrs.style (styles ++ [("box-sizing", "border-box")]) ])
 
 
 {-| Convert an Item to Html by placing it inside of a sized container. -}
