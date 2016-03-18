@@ -54,7 +54,7 @@ module Scaffold.Layout
 
   lerpOf, move, moveX, moveY, place, placeX, placeY,
 
-  emptyItem, makeItem, makeItemStyled, iconItem, toItem, fromItem, fromItemStyled)
+  emptyItem, makeItem, makeItemStyled, iconItem, makeIconItem, toItem, fromItem, fromItemStyled)
 
   where
 
@@ -85,7 +85,7 @@ module Scaffold.Layout
 @docs lerpOf, move, moveX, moveY, place, placeX, placeY
 
 # Create and Display Items
-@docs emptyItem, makeItem, makeItemStyled, iconItem, toItem, fromItem, fromItemStyled
+@docs emptyItem, makeItem, makeItemStyled, iconItem, makeIconItem, toItem, fromItem, fromItemStyled
 
 -}
 
@@ -310,14 +310,20 @@ as well. Note that the size and color arguments are intentionally flipped. This 
 purposes; it is much less likely for the size of an icon to change than the color. -}
 iconItem : (Color.Color -> Int -> Svg.Svg) -> Int -> Color.Color -> Item
 iconItem fsvg size' color' =
-  Svg.svg
-    [ SvgAttrs.width (toString size')
-    , SvgAttrs.height (toString size')
-    , SvgAttrs.viewBox ("0 0 " ++ (toString size') ++ " " ++ (toString size'))
+  makeIconItem fsvg [ ] size' color'
+
+
+{-| iconItem, but you can set html attributes on the container div. -}
+makeIconItem : (Color.Color -> Int -> Svg.Svg) -> List Html.Attribute -> Int -> Color.Color -> Item
+makeIconItem fsvg attribs size' color' =
+  makeItem size' size' Html.div attribs
+    [ Svg.svg
+        [ SvgAttrs.width (toString size')
+        , SvgAttrs.height (toString size')
+        , SvgAttrs.viewBox ("0 0 " ++ (toString size') ++ " " ++ (toString size'))
+        ]
+        [ fsvg color' size' ]
     ]
-    [ fsvg color' size'
-    ]
-  |> toItem size' size'
 
 
 {-| Create an item using an Html constructor. Nice for when you largely rely on Layout over Html,
