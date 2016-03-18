@@ -45,8 +45,8 @@ module Scaffold.Layout
 
   spacedBetween, spacedBy, regularly, vertically, horizontally,
 
-  defBounds, autoBounds, boundsHeight, boundsLower, boundsSize, boundsUpper, boundsWidth,
-  clampedBounds, clampedInnerBounds, clampedOuterBounds,
+  defBounds, defSizeBounds, defCenteredBounds, autoBounds, boundsHeight, boundsLower, boundsSize,
+  boundsUpper, boundsWidth, clampedBounds, clampedInnerBounds, clampedOuterBounds,
 
   grabItem, grabItemRelative, grabItemRelativeX, grabItemRelativeY, grabItemX, grabItemY,
 
@@ -73,7 +73,7 @@ module Scaffold.Layout
 @docs spacedBetween, spacedBy, regularly, vertically, horizontally
 
 # Bounds Definitions
-@docs defBounds, autoBounds, boundsHeight, boundsLower, boundsSize, boundsUpper, boundsWidth, clampedBounds, clampedInnerBounds, clampedOuterBounds
+@docs defBounds, defSizeBounds, defCenteredBounds, autoBounds, boundsHeight, boundsLower, boundsSize, boundsUpper, boundsWidth, clampedBounds, clampedInnerBounds, clampedOuterBounds
 
 # Item Grabs
 @docs grabItem, grabItemRelative, grabItemRelativeX, grabItemRelativeY, grabItemX, grabItemY
@@ -234,6 +234,22 @@ boundsHeight = boundsSize >> snd
 defBounds : Int -> Int -> Int -> Int -> Bounds
 defBounds x0 y0 x1 y1 =
   BB (x0, y0) (x1, y1)
+
+
+{-| Define a bounding box at (0, 0) -}
+defSizeBounds : Int -> Int -> Bounds
+defSizeBounds = defBounds 0 0
+
+
+{-| Define a bounding box with a particular size whose center falls on (0, 0) -}
+defCenteredBounds : Int -> Int -> Bounds
+defCenteredBounds w h =
+  let
+    wm = (toFloat w) / 2 |> floor
+    hm = (toFloat h) / 2 |> floor
+
+  in
+    defBounds (-wm) (-wm) (w-wm) (h-hm)
 
 
 {-| Clamp a bounding box to some inner bounding box and some outer bounding box. Either the inner
