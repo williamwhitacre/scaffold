@@ -1,5 +1,5 @@
 {
-    "version": "5.9.0",
+    "version": "5.10.0",
     "summary": "Scaffold - Elm Boilerplate Reduction For Production Apps",
     "repository": "https://github.com/williamwhitacre/scaffold.git",
     "license": "",
@@ -11,12 +11,15 @@
         "Scaffold.Error",
         "Scaffold.Layout",
         "Scaffold.Machine",
-        "Scaffold.Resource"
+        "Scaffold.Resource",
+        "Scaffold.Resource.Fire"
     ],
     "dependencies": {
         "Apanatshka/elm-signal-extra": "5.7.0 <= v < 6.0.0",
         "NoRedInk/elm-lazy-list": "2.0.0 <= v < 3.0.0",
         "NoRedInk/elm-task-extra": "1.0.1 <= v < 2.0.0",
+        "ThomasWeiser/elmfire": "1.0.5 <= v < 2.0.0",
+        "ThomasWeiser/elmfire-extra": "1.0.3 <= v < 2.0.0",
         "circuithub/elm-html-extra": "1.5.2 <= v < 2.0.0",
         "elm-lang/core": "3.0.0 <= v < 4.0.0",
         "evancz/elm-html": "4.0.2 <= v < 5.0.0",

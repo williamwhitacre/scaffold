@@ -37,7 +37,7 @@ module Scaffold.App
 
   run, runAnd, defSingletonInputs, defSequenceInputs, defLazySequenceInputs, sink,
 
-  updated, presented, withTasks, withDispatchment, withDispatchments, withChildren, viewOutputTask,
+  updated, presented, withTask, withTasks, withDispatchment, withDispatchments, withChildren, viewOutputTask,
 
   actionTask, actionTaskAsync, errorTask, computeTask, computedSuccess, computedSuccessAsync,
   noActions, nilTask,
@@ -93,7 +93,7 @@ module Scaffold.App
 @docs run, runAnd, defSingletonInputs, defSequenceInputs, defLazySequenceInputs, sink
 
 # UpdatedModel and ViewOutput Manipulation
-@docs updated, presented, withTasks, withDispatchment, withDispatchments, withChildren, viewOutputTask
+@docs updated, presented, withTask, withTasks, withDispatchment, withDispatchments, withChildren, viewOutputTask
 
 # Dispatch Actions and Errors
 @docs actionTask, actionTaskAsync, errorTask, computeTask, computedSuccess, computedSuccessAsync, noActions, nilTask
@@ -462,8 +462,8 @@ promoteDispatchment xdcr dsp =
 
 {-| Add some tasks to the output of any of the three Program functions.
 
-    updated model `withTasks` [actionTask [Jump, Run]]
-    presented viewstuff `withTasks` [errorTask [reportError "You done goofed."]]
+    updated model |> withTasks [actionTask [Jump, Run]]
+    presented viewstuff |> withTasks [errorTask [reportError "You done goofed."]]
 
 This is definitely the most elegant way to build a TaskDispatchment as well, especially in the
 context of declaring causality.
@@ -476,6 +476,14 @@ withTasks tasks out' =
   { out'
   | dispatchment = dispatch_ out'.dispatchment tasks
   }
+
+{-| Add a single task to the output of any of the three program functions. -}
+withTask
+  :  ProgramTask bad a
+  -> { anything | dispatchment : TaskDispatchment bad a }
+  -> { anything | dispatchment : TaskDispatchment bad a }
+withTask task out' =
+  withTasks [task] out'
 
 
 {-| This is the same as `withTasks`, but it takes an already existing TaskDispatchment. -}

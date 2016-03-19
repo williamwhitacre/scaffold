@@ -4,6 +4,7 @@
 import Scaffold.App as App
 import Scaffold.Machine as Machine exposing (Machine)
 import Scaffold.Resource as Res exposing (Resource, ResourceRef, UserTask, ResourceTask)
+import Scaffold.Resource.Fire as ResFire
 
 
 -- Just for show
