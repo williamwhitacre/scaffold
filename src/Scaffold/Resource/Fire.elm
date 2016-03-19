@@ -1,14 +1,14 @@
 module Scaffold.Resource.Fire
 
   (Config, Output, Action(..), Model, Machine
-  , initialModel, update, stage, present, program, machine)
+  , initialModel, config, withOrdering, update, stage, present, program, machine)
 
   where
 
 
 {-| Firebase bindings for Scaffold.Resource using ElmFire.Dict and ElmFire.Op
 
-@docs Config, Output, Action, Model, Machine, initialModel, update, stage, present, program, machine
+@docs Config, Output, Action, Model, Machine, config, withOrdering, initialModel, update, stage, present, program, machine
 -}
 
 import Scaffold.App as App
@@ -40,6 +40,24 @@ type alias Config v =
   , orderOptions : ElmFire.OrderOptions
   , encoder : v -> Json.Encode.Value
   , decoder : Json.Decode.Decoder v
+  }
+
+
+{-| -}
+config : (v -> Json.Encode.Value) -> (Json.Decode.Decoder v) -> ElmFire.Location -> Config v
+config encoder decoder location =
+  { location = location
+  , encoder = encoder
+  , decoder = decoder
+  , orderOptions = ElmFire.noOrder
+  }
+
+
+{-| -}
+withOrdering : ElmFire.OrderOptions -> Config v -> Config v
+withOrdering orderOptions config =
+  { config
+  | orderOptions = orderOptions
   }
 
 
