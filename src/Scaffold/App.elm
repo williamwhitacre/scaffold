@@ -53,7 +53,7 @@ module Scaffold.App
   programSnapshot, programSnapshotAddDispatchment, programSnapshotDispatch,
   programSnapshotPresent, programSnapshotStage, programSnapshotUpdate, performCycle,
 
-  agentSuccess, agentFailure, agent, successAgent, failureAgent,
+  agentSuccess, agentSingletonSuccess, agentFailure, agent, successAgent, failureAgent,
   binaryAgent, blindAgent, nilAgent, resultAgent, ignoreError)
 
   where
@@ -108,7 +108,7 @@ module Scaffold.App
 @docs programSnapshot, programSnapshotAddDispatchment, programSnapshotDispatch, programSnapshotPresent, programSnapshotStage, programSnapshotUpdate, performCycle
 
 # Program Task Agents
-@docs agentSuccess, agentFailure, agent, successAgent, failureAgent, binaryAgent, blindAgent, nilAgent, resultAgent, ignoreError
+@docs agentSuccess, agentSingletonSuccess, agentFailure, agent, successAgent, failureAgent, binaryAgent, blindAgent, nilAgent, resultAgent, ignoreError
 
 
 -}
@@ -530,20 +530,26 @@ withChildren children out' =
 -- Architecture as per usual, we can have logarithmic code size.
 --
 
-{-| Represents the status of a given ProgramAgent. Program agents are a way of transforming the
+{-| Represents the status of a given program agent. Program agents are a way of transforming the
 results of arbitrary tasks in to actions and errors for the program to consume. -}
 type AgentStatus bad a =
   AgentSuccess (List a)
   | AgentFailure bad
 
 
-{-| Successful ProgramAgent output. -}
+{-| Successful program agent output. -}
 agentSuccess : List a -> AgentStatus bad a
 agentSuccess actions =
   AgentSuccess actions
 
 
-{-| Failed ProgramAgent output. -}
+{-| Successful program agent output. -}
+agentSingletonSuccess : a -> AgentStatus bad a
+agentSingletonSuccess action =
+  AgentSuccess [action]
+
+
+{-| Failed program agent output. -}
 agentFailure : bad -> AgentStatus bad a
 agentFailure err' =
   AgentFailure err'
