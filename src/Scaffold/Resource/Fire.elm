@@ -229,6 +229,7 @@ subscribe address now model =
 
   in
     { model | isStarted = True }
+    |> updateOutput now
     |> App.updated
     |> App.withTask subscriptionTask
 
@@ -238,7 +239,7 @@ stage address now model =
   case model.config' of
     Nothing ->
       if not model.isStarted then
-        subscribe address now model
+        subscribe address now (Debug.log "Subscribing from this model" model)
       else
         updateOutput now model
         |> App.updated
