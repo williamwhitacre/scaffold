@@ -231,7 +231,7 @@ subscribe address now model =
     { model | isStarted = True }
     |> updateOutput now
     |> App.updated
-    |> App.withTask subscriptionTask
+    |> App.withTasks [subscriptionTask]
 
 
 stage : Signal.Address (List (Action v)) -> Time -> Model v -> App.UpdatedModel (Action v) (Model v) ElmFire.Error
@@ -240,6 +240,7 @@ stage address now model =
     Nothing ->
       if not model.isStarted then
         subscribe address now (Debug.log "Subscribing from this model" model)
+        |> Debug.log "Produced this output from staging."
       else
         updateOutput now model
         |> App.updated
