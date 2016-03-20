@@ -226,6 +226,7 @@ subscribe address now model =
       |> App.agent
         (\killTask -> Debug.log "started Fire subscription" () |> \_ -> App.agentSingletonSuccess (Started killTask))
         (\error -> Debug.log "error starting Fire subscription" () |> \_ -> App.agentSingletonSuccess (ReportError error))
+      |> Debug.log "subscribing with subscription task"
 
   in
     { model | isStarted = True }
@@ -246,9 +247,12 @@ stage address now model =
         |> App.updated
 
     Just newConfig ->
-      initialModel newConfig
-      |> stage address now
-      |> App.withDispatchment (update Kill now model |> .dispatchment)
+      { model
+      | config = newConfig
+      , elmfireConfig = elmfireConfigOf newConfig
+      , kill = Nothing
+      , isStarted = False
+      } |> subscribe address now
 
 
 present : Signal.Address (List (Action v)) -> Time -> Model v -> App.ViewOutput (Action v) (Output v) ElmFire.Error
