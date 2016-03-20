@@ -140,7 +140,7 @@ updateOutput now model =
 
 update : Action v -> Time -> Model v -> App.UpdatedModel (Action v) (Model v) ElmFire.Error
 update action now model =
-  case action of
+  case (Debug.log "Fire action" action) of
     Reconfigure newConfig ->
       { model | config' = Just newConfig }
       |> App.updated
@@ -223,7 +223,9 @@ subscribe address now model =
   let
     subscriptionTask =
       ElmFire.Dict.subscribeDelta (Signal.forwardTo (App.forwardSingleton address) ApplyDelta) model.elmfireConfig
-      |> App.agent (Started >> App.agentSingletonSuccess) (ReportError >> App.agentSingletonSuccess)
+      |> App.agent
+        (\killTask -> Debug.log "started Fire subscription" () |> \_ -> App.agentSingletonSuccess (Started killTask))
+        (\error -> Debug.log "error starting Fire subscription" () |> \_ -> App.agentSingletonSuccess (ReportError error))
 
   in
     { model | isStarted = True }
