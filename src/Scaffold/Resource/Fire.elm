@@ -85,12 +85,13 @@ type Action v =
 
 
 type alias Model v =
-  { output : Output v
+  { config : Config v
   , elmfireConfig : ElmFire.Dict.Config v -- Internal configuration.
-  , config : Config v
+  , output : Output v
+  , kill : Maybe (Task ElmFire.Error ())
   , isStarted : Bool
   , resource : Res.Resource String v
-  , kill : Maybe (Task ElmFire.Error ())
+  , config' : Maybe (Config v)
   }
 
 
@@ -115,11 +116,12 @@ initialOutput config =
 initialModel : Config v -> Model v
 initialModel config =
   { output = initialOutput config
-  , elmfireConfig = elmfireConfigOf config
   , config = config
-  , resource = Res.groupResource []
-  , isStarted = False
+  , elmfireConfig = elmfireConfigOf config
   , kill = Nothing
+  , isStarted = False
+  , resource = Res.groupResource []
+  , config' = Nothing
   }
 
 
@@ -136,38 +138,28 @@ updateOutput now model =
   } |> \output' -> { model | output = output' }
 
 
---tryKill : Time -> Model v -> (Model v, List (App.ProgramTask z Action))
-tryKill now model =
-  case model.kill of
-    Nothing -> (model, [ ])
-    Just killTask ->
-      killTask
-      |> App.failureAgent
-          (App.agentSuccess [])
-          (ReportError >> App.agentSingletonSuccess)
-      |> \outTask -> ({ model | kill = Nothing }, [ outTask ])
-
-
 update : Action v -> Time -> Model v -> App.UpdatedModel (Action v) (Model v) ElmFire.Error
 update action now model =
   case (Debug.log "Fire action" action) of
     Reconfigure newConfig ->
-      let
-        (model', tasks) = tryKill now model
-      in
-        App.updated { model' | config = newConfig, isStarted = False }
-        |> App.withTasks tasks
+      { model | config' = Just newConfig }
+      |> App.updated
 
     Started killTask ->
-      { model | kill = Just killTask }
+      { model | kill = Just killTask, isStarted = True }
       |> App.updated
 
     Kill ->
-      let
-        (model', tasks) = tryKill now model
-      in
-        App.updated model
-        |> App.withTasks tasks
+      case model.kill of
+        Nothing -> App.updated model
+        Just killTask ->
+          killTask
+          |> App.failureAgent
+              (App.agentSuccess [])
+              (ReportError >> App.agentSingletonSuccess)
+          |> \outTask -> { model | kill = Nothing }
+          |> App.updated
+          |> App.withTask outTask
 
     ApplyDelta delta ->
       case model.kill of
@@ -199,6 +191,7 @@ update action now model =
             ElmFire.Dict.Unsubscribed ->
               { model
               | resource = Res.unknownResource
+              , kill = Nothing
               }
 
             ElmFire.Dict.QueryError error ->
@@ -243,11 +236,19 @@ subscribe address now model =
 
 stage : Signal.Address (List (Action v)) -> Time -> Model v -> App.UpdatedModel (Action v) (Model v) ElmFire.Error
 stage address now model =
-  if not model.isStarted then
-    subscribe address now model
-  else
-    updateOutput now model
-    |> App.updated
+  case model.config' of
+    Nothing ->
+      if not model.isStarted then
+        subscribe address now (Debug.log "Subscribing from this model" model)
+        |> Debug.log "Produced this output from staging."
+      else
+        updateOutput now model
+        |> App.updated
+
+    Just newConfig ->
+      initialModel newConfig
+      |> stage address now
+      |> App.withDispatchment (update Kill now model |> .dispatchment)
 
 
 present : Signal.Address (List (Action v)) -> Time -> Model v -> App.ViewOutput (Action v) (Output v) ElmFire.Error
