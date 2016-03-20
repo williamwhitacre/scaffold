@@ -199,7 +199,6 @@ update action now model =
             ElmFire.Dict.Unsubscribed ->
               { model
               | resource = Res.unknownResource
-              , kill = Nothing
               }
 
             ElmFire.Dict.QueryError error ->
