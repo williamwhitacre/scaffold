@@ -48,7 +48,7 @@ module Scaffold.App
   outputView,
 
   combineDispatchments, collapseTasks, dispatchTasks, dispatchmentHasWork, dispatchmentTask,
-  promoteDispatchment,
+  promoteDispatchmentErrors, promoteDispatchment, handleDispatchmentErrors,
 
   programSnapshot, programSnapshotAddDispatchment, programSnapshotDispatch,
   programSnapshotPresent, programSnapshotStage, programSnapshotUpdate, performCycle,
@@ -102,7 +102,7 @@ module Scaffold.App
 @docs itself, itselfAsync, it'sErrorConnector, thisAddress, thisAddressAsync, thisForwardAddress, thisForwardAddressAsync, thisErrorConnector, thisForwardConnector, thisConnector, outputView
 
 # Handling Tasks and TaskDispatchment
-@docs combineDispatchments, collapseTasks, dispatchTasks, dispatchmentHasWork, dispatchmentTask, promoteDispatchment
+@docs combineDispatchments, collapseTasks, dispatchTasks, dispatchmentHasWork, dispatchmentTask, promoteDispatchment, promoteDispatchmentErrors, handleDispatchmentErrors
 
 # Manipulate Program Snapshots
 @docs programSnapshot, programSnapshotAddDispatchment, programSnapshotDispatch, programSnapshotPresent, programSnapshotStage, programSnapshotUpdate, performCycle
@@ -449,13 +449,35 @@ combineDispatchments dsp dsp' =
   { dsp | taskExec = dsp.taskExec +++ dsp'.taskExec }
 
 
-{-| Using some transformation function, create a TaskDispatchment with a different action type. -}
+{-| Using some function, create a TaskDispatchment with a different action type. -}
 promoteDispatchment : (List a -> List a') -> TaskDispatchment bad a -> TaskDispatchment bad a'
 promoteDispatchment xdcr dsp =
   { dsp
   | taskExec =
     Lazy.List.map
       (\task -> task `andThen` \a0 -> actionTask (xdcr a0.sequence))
+      dsp.taskExec
+  }
+
+
+{-| Using some function, create a TaskDispatchment with a different error type. -}
+promoteDispatchmentErrors : (bad -> bad') -> TaskDispatchment bad a -> TaskDispatchment bad' a
+promoteDispatchmentErrors xdcr dsp =
+  { dsp
+  | taskExec =
+    Lazy.List.map
+      (\task -> task `onError` (xdcr >> Task.fail))
+      dsp.taskExec
+  }
+
+
+{-| Transform errors from a dispatchment back in to actions at any point. -}
+handleDispatchmentErrors : (bad -> List a) -> TaskDispatchment bad a -> TaskDispatchment bad a
+handleDispatchmentErrors xdcr dsp =
+  { dsp
+  | taskExec =
+    Lazy.List.map
+      (\task -> task `onError` \e0 -> actionTask (xdcr e0))
       dsp.taskExec
   }
 
