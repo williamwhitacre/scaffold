@@ -135,7 +135,7 @@ updateOutput now model =
       Just _ -> True
   , lastUpdated = now
   , resource = model.resource
-  } |> \output' -> { model | output = output' }
+  } |> \output' -> { model | output = (Debug.log "new output" output') }
 
 
 update : Action v -> Time -> Model v -> App.UpdatedModel (Action v) (Model v) ElmFire.Error
