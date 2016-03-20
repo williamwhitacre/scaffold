@@ -1,14 +1,13 @@
 module Scaffold.Resource.Fire
 
-  (Config, Output, Action(..), Model, Machine
-  , initialModel, config, withOrdering, update, stage, present, program, machine)
+  (Config, Output, Action(..), Machine, config, withOrdering, program, machine)
 
   where
 
 
 {-| Firebase bindings for Scaffold.Resource using ElmFire.Dict and ElmFire.Op
 
-@docs Config, Output, Action, Model, Machine, config, withOrdering, initialModel, update, stage, present, program, machine
+@docs Config, Output, Action, Machine, config, withOrdering, program, machine
 -}
 
 import Scaffold.App as App
@@ -77,14 +76,14 @@ type alias Machine v =
 
 {-| Dataset action type -}
 type Action v =
-  Kill
+  Reconfigure (Config v)
+  | Kill
   | Started (Task ElmFire.Error ())
   | ApplyDelta (ElmFire.Dict.Delta v)
   | DoOperation (ElmFire.Op.Operation v)
   | ReportError ElmFire.Error
 
 
-{-| -}
 type alias Model v =
   { config : Config v
   , elmfireConfig : ElmFire.Dict.Config v -- Internal configuration.
@@ -92,6 +91,7 @@ type alias Model v =
   , kill : Maybe (Task ElmFire.Error ())
   , isStarted : Bool
   , resource : Res.Resource String v
+  , config' : Maybe (Config v)
   }
 
 
@@ -113,7 +113,6 @@ initialOutput config =
   }
 
 
-{-| Initial model for an ElmFire.Dict program. -}
 initialModel : Config v -> Model v
 initialModel config =
   { output = initialOutput config
@@ -122,6 +121,7 @@ initialModel config =
   , kill = Nothing
   , isStarted = False
   , resource = Res.groupResource []
+  , config' = Nothing
   }
 
 
@@ -138,10 +138,13 @@ updateOutput now model =
   } |> \output' -> { model | output = output' }
 
 
-{-| -}
 update : Action v -> Time -> Model v -> App.UpdatedModel (Action v) (Model v) ElmFire.Error
 update action now model =
   case action of
+    Reconfigure newConfig ->
+      { model | config' = Just newConfig }
+      |> App.updated
+
     Started killTask ->
       { model | kill = Just killTask, isStarted = True }
       |> App.updated
@@ -228,17 +231,22 @@ subscribe address now model =
     |> App.withTask subscriptionTask
 
 
-{-| -}
 stage : Signal.Address (List (Action v)) -> Time -> Model v -> App.UpdatedModel (Action v) (Model v) ElmFire.Error
 stage address now model =
-  if not model.isStarted then
-    subscribe address now model
-  else
-    updateOutput now model
-    |> App.updated
+  case model.config' of
+    Nothing ->
+      if not model.isStarted then
+        subscribe address now model
+      else
+        updateOutput now model
+        |> App.updated
+
+    Just newConfig ->
+      initialModel newConfig
+      |> stage address now
+      |> App.withDispatchment (update Kill now model |> .dispatchment)
 
 
-{-| -}
 present : Signal.Address (List (Action v)) -> Time -> Model v -> App.ViewOutput (Action v) (Output v) ElmFire.Error
 present address now model =
   App.presented model.output
@@ -252,24 +260,3 @@ program = initialModel >> App.defStagedProgram present stage update
 {-| -}
 machine : Config v -> Machine v
 machine = program >> Machine.machine
-
-
-{-
-
-    (userSubscription', userSubscriptionDispatchment) =
-      if Res.isVoid model'.userSubscription then
-        ( Res.pendingResource
-        , [ ElmFire.subscribe
-              (\snapshot -> Signal.send address [SetUserData (ElmFire.exportValue snapshot)])
-              (\cancel' -> Signal.send address [ClearUserSubscription])
-              (ElmFire.valueChanged ElmFire.noOrder)
-              (NuMaya.Config.identityLocation model'.auth.uid)
-            |> App.successAgent
-              (\subscription -> App.agentSuccess [ SetUserSubscription subscription ])
-              (App.agentSuccess [ ])
-          ] |> App.dispatchTasks
-        )
-      else
-        (model'.userSubscription, App.dispatchTasks [ ])
-
--}
